@@ -1,0 +1,454 @@
+﻿@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Models.SmsConfig
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models.enums
+@using QueueManagementSystem.MVC.Services
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+@inject ISmsService SmsService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2;">
+    <div class="col-md-12 text-right">
+        <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Info" style="color: white;" @onclick="OpenConfigModal"  Class="float-end me-2">Config Options</Button>
+    </div>
+    <div class="row">
+        <h4>SMS Gateway Configuration</h4>
+        <EditForm Model="@smsSettings" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="smsSettings.Name" />
+                        <ValidationMessage For="@(() => smsSettings.Name)" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Response Type <span class="text-danger">*</span></label>
+                        <InputSelect   @bind-Value="smsSettings.ResponseType" class="form-control">
+                            <option value="">--Select Response Type--</option>
+                            @foreach (ResponseType type in Enum.GetValues(typeof(ResponseType)))
+                            {
+                                <option value="@type">@type.ToString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => smsSettings.Id)" />
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Endpoint <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="smsSettings.Url" />
+                        <ValidationMessage For="@(() => smsSettings.Url)" />
+                    </div>
+                
+                   
+                </div>
+                <div class="col-md-4">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Method <span class="text-danger">*</span></label>
+                        <InputSelect   @bind-Value="smsSettings.HttpMethod" class="form-control">
+                            <option value="">--Select Method Type--</option>
+                            @foreach (MethodType method in Enum.GetValues(typeof(MethodType)))
+                            {
+                                <option value="@method">@method.ToString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => smsSettings.Id)" />
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        Save Settings
+                    </Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+    
+    
+</div>
+<div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+    <Grid @ref="grid" TItem="SmsSettingsModel" Class="table table-bordered table-light table-sm compact-grid" Data="smsSettingsList" AllowPaging="true"
+          PageSize="10"
+          SelectionMode="GridSelectionMode.Single"
+          AllowSorting="true"
+          AllowRowClick="true"
+          EmptyText="No records to display"
+          PageSizeSelectorVisible="true"
+          PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+          OnRowClick="OnRowSelected"
+          Responsive="true"
+          RowClass="@(x => x == smsSettings ? "selected-row" : "")">
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+            @context.Id
+        </GridColumn>
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Name" SortString="Name" SortKeySelector="item => item.Name">
+            @context.Name
+        </GridColumn>
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Endpoint" SortString="Endpoint" SortKeySelector="item => item.Url">
+            @context.Url
+        </GridColumn>
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Method" SortString="Method" SortKeySelector="item => item.HttpMethod.ToString()">
+            @context.HttpMethod.ToString()
+        </GridColumn>
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Response Type" SortString="Response type" SortKeySelector="item => item.ResponseType.ToString()">
+            @context.ResponseType.ToString()
+        </GridColumn>
+        <GridColumn TItem="SmsSettingsModel" HeaderText="Actions">
+            <Button Size="ButtonSize.Small" Color="ButtonColor.Danger" @onclick="@(() => OnDeleteAsync(context))">Delete</Button>
+        </GridColumn>
+
+    </Grid>
+</div>
+@* /modal UI/ *@
+<Modal @ref="configModal" title="@($"{settingsName} Sms Parameters Configurations")" Size="ModalSize.Large" IsVerticallyCentered="true" UseStaticBackdrop="true" CloseOnEscape="false">
+
+    <BodyTemplate>
+
+        
+        <div class="row">
+            
+            <EditForm Model="@smsConfigs" autocomplete="off" OnValidSubmit="OnFormSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+             <div class="row">
+            <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label">Type <span class="text-danger">*</span></label>
+                            <InputSelect @bind-Value="smsConfigs.ParameterType" class="form-control">
+                                <option value="">--Select Response Type--</option>
+                                @foreach (ParameterType type in Enum.GetValues(typeof(ParameterType)))
+                                {
+                                    <option value="@type">@type.ToString()</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => smsConfigs.Id)" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Response Type <span class="text-danger">*</span></label>
+                            <InputSelect @bind-Value="smsConfigs.Classification" class="form-control">
+                                <option value="">--Select Response Type--</option>
+                                @foreach (Classification type in Enum.GetValues(typeof(Classification)))
+                                {
+                                    <option value="@type">@type.ToString()</option>
+                                }
+                            </InputSelect>
+                            <ValidationMessage For="@(() => smsConfigs.Id)" />
+                        </div>
+            </div>
+            <div class="col-md-6">
+                       
+                <div class="mb-3">
+                    <label for="Key" class="form-label">Key</label>
+                            <InputText id="key" class="form-control" @bind-Value="smsConfigs.Key" />
+                            <ValidationMessage For="@(() => smsConfigs.Key)" />
+                </div>
+                        <div class="mb-3">
+                            <label for="Value" class="form-label">Value</label>
+                            <InputText id="value" class="form-control" @bind-Value="smsConfigs.Value" />
+                            <ValidationMessage For="@(() => smsConfigs.Value)" />
+                        </div>
+            </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12 text-right">
+                        <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                           +
+                        </Button>
+                    </div>
+                </div><br/>
+        </EditForm>
+        </div>
+
+
+
+        <div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+            <Grid @ref="configGrid" TItem="SmsConfigDetails" Class="table table-bordered table-light table-sm compact-grid" Data="smsconfigList" AllowPaging="true"
+                  PageSize="1"
+                  SelectionMode="GridSelectionMode.Single"
+                  AllowSorting="true"
+                  AllowRowClick="true"
+                  EmptyText="No records to display"
+                  PageSizeSelectorVisible="true"
+                  PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+                  OnRowClick="OnRowSelect"
+                  Responsive="true"
+                  RowClass="@(x => x == smsConfigs ? "selected-row" : "")">
+                <GridColumn TItem="SmsConfigDetails" HeaderText="Key" SortString="Key" SortKeySelector="item => item.Key">
+                    @context.Key
+                </GridColumn>
+                <GridColumn TItem="SmsConfigDetails" HeaderText="Value" SortString="Value" SortKeySelector="item => item.Value">
+                    @context.Value
+                </GridColumn>
+
+                <GridColumn TItem="SmsConfigDetails" HeaderText="Method" SortString="Method" SortKeySelector="item => item.ParameterType.ToString()">
+                    @context.ParameterType.ToString()
+                </GridColumn>
+                <GridColumn TItem="SmsConfigDetails" HeaderText="Response Type" SortString="Response type" SortKeySelector="item => item.Classification.ToString()">
+                    @context.Classification.ToString()
+                </GridColumn>
+
+
+            </Grid>
+        </div>
+    </BodyTemplate>
+</Modal>
+<br />
+<br />
+
+<ConfirmDialog @ref="deleteDialog" />
+<style>
+    .selected-row {
+        background-color: #daf1de;
+    }
+
+    .table-sm {
+        font-size: 0.875rem;
+    }
+
+        .table-sm td, .table-sm th {
+            padding: 0.25rem;
+        }
+
+    .p-1 {
+        padding: 0.25rem;
+    }
+
+    .grid-header, .grid-row {
+        line-height: 0.4;
+    }
+</style>
+@code {
+    private SmsSettingsModel smsSettings = new SmsSettingsModel();
+    private SmsConfigDetails smsConfigs = new SmsConfigDetails();
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    private ConfirmDialog deleteDialog = default!;
+    private List<SmsSettingsModel> smsSettingsList = new List<SmsSettingsModel>();
+    private List<SmsConfigDetails> smsconfigList = new List<SmsConfigDetails>();
+
+    private Grid<SmsSettingsModel>? grid;
+    private Grid<SmsConfigDetails>? configGrid;
+    private int? selectedRowId;
+    private int? selectedRow;
+    private Modal configModal;
+    private string? settingsName;
+
+
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSmsSettings();
+    }
+
+
+    private void OnRowSelected(GridRowEventArgs<SmsSettingsModel> args)
+    {
+        smsSettings = args.Item;
+        selectedRowId = args.Item.Id;
+        // isButtonInVisible = false;
+        // isEditing = true;
+    }
+    private void OnRowSelect(GridRowEventArgs<SmsConfigDetails> args)
+    {
+        smsConfigs = args.Item;
+        selectedRow = args.Item.Id;
+        // isButtonInVisible = false;
+        // isEditing = true;
+    }
+    private void CreateNew()
+    {
+        // isButtonInVisible = true;
+        // isEditing = false;
+        smsSettings = new SmsSettingsModel();
+    }
+
+    private async Task LoadSmsConfigs()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var configs = await context.SmsConfigs.ToListAsync();
+            if (configs != null)
+            {
+                smsconfigList = configs;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error loading configs: {ex.Message}"));
+        }
+    }
+    private async Task LoadSmsSettings()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var settings = await context.SmsSettings.ToListAsync();
+            if (settings != null)
+            {
+                smsSettingsList = settings;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error loading settings: {ex.Message}"));
+        }
+    }
+    private async Task OnDeleteAsync(SmsSettingsModel settings)
+    {
+        var confirmation = await deleteDialog.ShowAsync(
+            title: "Are you sure you want to delete?",
+            message1: "This will delete the settings. Once deleted, it cannot be rolled back.");
+
+        if (confirmation)
+        {
+            try
+            {
+                using var context = DbFactory.CreateDbContext();
+                var settingsToDelete = await context.SmsSettings
+                    .Include(c => c.Id)
+                    .FirstOrDefaultAsync(c => c.Id == settings.Id);
+
+                if (settingsToDelete == null)
+                {
+                    ToastService.Notify(new(ToastType.Danger, "Category not found."));
+                    return;
+                }
+
+                if (settingsToDelete.SmsConfigDetails.Count > 0)
+                {
+                    ToastService.Notify(new(ToastType.Warning, "Cannot delete settings. It is linked to one or more configugations options."));
+                    return;
+                }
+
+                context.SmsSettings.Remove(settingsToDelete);
+                await context.SaveChangesAsync();
+                // await RefreshCategoriesData(context);
+                ToastService.Notify(new(ToastType.Success, "Settings deleted successfully."));
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+            }
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage(ToastType.Secondary, "Delete action canceled."));
+        }
+    }
+
+    private void OpenConfigModal()
+    {
+        if (smsSettings.Id > 0)
+        {
+            settingsName = smsSettings.Name;
+            configModal.ShowAsync();
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Select a setting first"
+                    });
+        }
+        // Assuming your Modal has a Show method to display it
+    }
+    private async Task OnValidFormSubmit()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var existingSettings = await context.SmsSettings.FirstOrDefaultAsync(p=>p.Name==smsSettings.Name);
+
+            if (existingSettings == null)
+            {
+                context.SmsSettings.Add(smsSettings);
+                await LoadSmsSettings();
+                StateHasChanged();
+            }
+            else
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "FAIL",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Name already registered"
+                    });
+            }
+
+            await context.SaveChangesAsync();
+            smsSettings = new SmsSettingsModel();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "SMS settings saved successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error saving settings: {ex.Message}"));
+        }
+    }
+    private async Task OnFormSubmit()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var existingSettings = await context.SmsConfigs.FirstOrDefaultAsync(p => p.Key == smsConfigs.Key);
+
+            if (existingSettings == null)
+            {
+            smsConfigs.SmsSettingsModelId = smsSettings.Id;
+            context.SmsConfigs.Add(smsConfigs);
+                
+            }
+            else
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "FAIL",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Key already added"
+                    });
+            }
+
+            await context.SaveChangesAsync();
+            await LoadSmsConfigs();
+            StateHasChanged();
+            smsConfigs = new SmsConfigDetails();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "SMS configuration saved successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error saving settings: {ex.Message}"));
+        }
+    }
+}

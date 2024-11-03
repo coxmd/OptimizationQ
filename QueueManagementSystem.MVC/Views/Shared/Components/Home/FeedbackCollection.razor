@@ -1,0 +1,144 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models.Feedback
+@using QueueManagementSystem.MVC.Models.enums
+@using QueueManagementSystem.MVC.Services
+<h3>FeedbackCollection</h3>
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+@* @inject FeedbackService feedbackService *@
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2;">
+    
+    <div class="row">
+        
+        <EditForm Model="@feedbackCollections" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-4">
+                    
+                     <div class="mb-3">
+                        <label class="form-label">How long did you wait? <span class="text-danger">*</span></label>
+                        <InputSelect class="form-control" @bind-Value="feedbackCollections.WaitTime" >
+                            <option value="">--Select Time--</option>
+                            @foreach (WaitTime type in Enum.GetValues(typeof(WaitTime)))
+                            {
+                                <option value="@type">@type.ToString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => feedbackCollections.Id)" />
+                    </div>
+                    <div class="mb-3">
+                    <label class="form-label">What improvements would you suggest?</label>
+                        <InputTextArea class="form-control"  @bind-Value="feedbackCollections.ImprovementSuggestion"></InputTextArea>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Was the wait time acceptable? <span class="text-danger">*</span></label>
+                        <InputSelect class="form-control" @bind-Value="feedbackCollections.WaitTimeAcceptance">
+                            <option value="">--Select--</option>
+                            @foreach (WaitTimeAcceptance type in Enum.GetValues(typeof(WaitTimeAcceptance)))
+                            {
+                                <option value="@type">@type.ToString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => feedbackCollections.Id)" />
+                        
+                    </div>
+
+
+                </div>
+                <div class="col-md-4">
+
+                    <div class="mb-3">
+                        <label class="form-label">Did any of the following challenge occur? <span class="text-danger">*</span></label>
+                        <InputSelect class="form-control" @bind-Value="feedbackCollections.Challenges">
+                            <option value="">--Select--</option>
+                            @foreach (Challenges type in Enum.GetValues(typeof(Challenges)))
+                            {
+                                <option value="@type">@type.ToString()</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => feedbackCollections.Id)" />
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        Save
+                    </Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+
+
+</div>
+@* <div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+    <Grid @ref="grid" TItem="Feedback" Class="table table-bordered table-light table-sm compact-grid" Data="smsSettingsList" AllowPaging="true"
+          PageSize="10"
+          SelectionMode="GridSelectionMode.Single"
+          AllowSorting="true"
+          AllowRowClick="true"
+          EmptyText="No records to display"
+          PageSizeSelectorVisible="true"
+          PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+          OnRowClick="OnRowSelected"
+          Responsive="true"
+          RowClass="@(x => x == feedbackCollections ? "selected-row" : "")">
+        <GridColumn TItem="Feedback" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+            @context.Id
+        </GridColumn>
+        <GridColumn TItem="Feedback" HeaderText="Endpoint" SortString="Endpoint" SortKeySelector="item => item.Challenges.ToString()">
+            @context.Challenges.ToString()
+        </GridColumn>
+        <GridColumn TItem="Feedback" HeaderText="Endpoint" SortString="Endpoint" SortKeySelector="item => item.WaitTimeAcceptance.ToString()">
+            @context.WaitTimeAcceptance.ToString()
+        </GridColumn>
+        <GridColumn TItem="Feedback" HeaderText="Wait Time" SortString="Wait Time" SortKeySelector="item => item.WaitTime.ToString()">
+            @context.WaitTime.ToString()
+        </GridColumn>
+        <GridColumn TItem="Feedback" HeaderText="Suggestion" SortString="Suggestion" SortKeySelector="item => item.ImprovementSuggestion">
+            @context.ImprovementSuggestion
+        </GridColumn>
+     
+
+    </Grid>
+</div> *@
+@code {
+    private List<ToastMessage> messages = new List<ToastMessage>();
+    private Feedback feedbackCollections = new Feedback();
+    private List<Feedback> smsSettingsList = new List<Feedback>();
+    private Grid<Feedback>? grid;
+    private int? selectedRowId;
+       
+    private async Task OnValidFormSubmit()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            context.Feedbacks.Add(feedbackCollections);
+            await context.SaveChangesAsync();
+            feedbackCollections = new Feedback();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = ""
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error saving comments: {ex.Message}"));
+        }
+    }
+}

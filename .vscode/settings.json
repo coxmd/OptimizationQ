@@ -1,0 +1,7 @@
+{
+    "dotnet.server.useOmnisharp": false,
+    "dotnetAcquisitionExtension.existingDotnetPath": [
+        
+    ],
+    
+}

@@ -1,0 +1,120 @@
+﻿@using Microsoft.AspNetCore.Components
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.Security.Claims
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextManager DbContextManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ToastService ToastService
+
+<div class="mt-3 mb-3">
+    <h5>@currentServicePointName</h5>
+    <select class="form-select" @onchange="SwitchRoom" value="@currentServicePointId">
+        <option value="@originalServicePointId">@originalServicePointName (My Service Point)</option>
+        @foreach (var servicePoint in availableServicePoints.Where(sp => sp.Id != originalServicePointId))
+        {
+            <option value="@servicePoint.Id">@servicePoint.Name</option>
+        }
+    </select>
+</div>
+
+@code {
+    private List<ServicePoint> availableServicePoints = new List<ServicePoint>();
+    private string currentServicePointName;
+    private int currentServicePointId;
+    private int currentServiceProviderId;
+    private string originalServicePointName;
+    private int originalServicePointId;
+
+    [Parameter]
+    public EventCallback<int> OnRoomSwitched { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        var serviceProviderId = user.FindFirst(claim => claim.Type == ClaimTypes.NameIdentifier)?.Value;
+
+        await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            var serviceProvider = await context.ServiceProviders
+                .Include(sp => sp.Service)
+                .SingleOrDefaultAsync(sp => sp.Id.ToString() == serviceProviderId);
+
+            var currentServicePointQuery = await context.ServicePoints
+                .Where(sp => sp.ServiceId == serviceProvider!.ServiceId)
+                .FirstOrDefaultAsync();
+
+            if (currentServicePointQuery != null)
+            {
+                currentServicePointName = currentServicePointQuery.Name!;
+                currentServicePointId = currentServicePointQuery.Id;
+                originalServicePointName = currentServicePointName;
+                originalServicePointId = currentServicePointId;
+            }
+
+            currentServiceProviderId = serviceProvider!.Id;
+
+            // Get all service points that offer the service provider's service
+            availableServicePoints = await context.ServicePoints
+                .Where(sp => sp.ServiceId == serviceProvider.ServiceId)
+                .ToListAsync();
+        });
+    }
+
+    private async Task SwitchRoom(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value.ToString(), out int newServicePointId))
+        {
+            if (newServicePointId == currentServicePointId)
+            {
+                // No change, return early
+                return;
+            }
+
+            await DbContextManager.ExecuteInContextAsync(async context =>
+            {
+                // Deactivate current assignment
+                var currentAssignment = await context.ServiceProviderAssignments
+                    .Where(spa => spa.ServiceProviderId == currentServiceProviderId && spa.IsActive)
+                    .FirstOrDefaultAsync();
+
+                if (currentAssignment != null)
+                {
+                    currentAssignment.IsActive = false;
+                }
+
+                // Create new assignment
+                var newAssignment = new ServiceProviderAssignment
+                    {
+                        ServiceProviderId = currentServiceProviderId,
+                        ServicePointId = newServicePointId,
+                        AssignmentTime = DateTime.UtcNow,
+                        IsActive = true
+                    };
+
+                context.ServiceProviderAssignments.Add(newAssignment);
+                await context.SaveChangesAsync();
+
+                var newServicePoint = await context.ServicePoints.FindAsync(newServicePointId);
+                currentServicePointName = newServicePoint!.Name!;
+                currentServicePointId = newServicePointId;
+            });
+
+            string switchMessage = newServicePointId == originalServicePointId
+                ? "You have switched back to your original service point"
+                : $"You have switched to {currentServicePointName}";
+
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "Room Switched",
+                    Message = switchMessage
+                });
+
+            await OnRoomSwitched.InvokeAsync(newServicePointId);
+        }
+    }
+}

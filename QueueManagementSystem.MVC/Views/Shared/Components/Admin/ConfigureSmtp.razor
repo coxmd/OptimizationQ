@@ -1,0 +1,124 @@
+﻿
+@using QueueManagementSystem.MVC.Models.Smtp
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Services
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+@inject IEmailSenderService EmailSenderService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2;">
+    <div class="row">
+        <h4>Smtp Configuration</h4>
+        <EditForm Model="@emailSettings" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Mail Server <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="emailSettings.MailServer" />
+                        <ValidationMessage For="@(() => emailSettings.MailServer)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mail Port <span class="text-danger">*</span></label>
+                        <InputNumber class="form-control" @bind-Value="emailSettings.MailPort" />
+                        <ValidationMessage For="@(() => emailSettings.MailPort)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sender Email <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="emailSettings.Sender" />
+                        <ValidationMessage For="@(() => emailSettings.Sender)" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Password <span class="text-danger">*</span></label>
+                        <InputText type="password" class="form-control" @bind-Value="emailSettings.Password" />
+                        <ValidationMessage For="@(() => emailSettings.Password)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sender Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="emailSettings.SenderName" />
+                        <ValidationMessage For="@(() => emailSettings.SenderName)" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        Save Settings
+                    </Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private EmailSettingsModel emailSettings = new EmailSettingsModel();
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEmailSettings();
+    }
+
+    private async Task LoadEmailSettings()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var settings = await context.SmptSettings.FirstOrDefaultAsync();
+            if (settings != null)
+            {
+                emailSettings = settings;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error loading settings: {ex.Message}"));
+        }
+    }
+
+    private async Task OnValidFormSubmit()
+    {
+        try
+        {
+            using var context = await DbFactory.CreateDbContextAsync();
+            var existingSettings = await context.SmptSettings.FirstOrDefaultAsync();
+
+            if (existingSettings == null)
+            {
+                context.SmptSettings.Add(emailSettings);
+            }
+            else
+            {
+                existingSettings.MailServer = emailSettings.MailServer;
+                existingSettings.MailPort = emailSettings.MailPort;
+                existingSettings.Sender = emailSettings.Sender;
+                existingSettings.Password = emailSettings.Password;
+                existingSettings.SenderName = emailSettings.SenderName;
+                context.SmptSettings.Update(existingSettings);
+            }
+
+            await context.SaveChangesAsync();
+
+            ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Success,
+                Title = "SUCCESS",
+                HelpText = $"{DateTime.Now}",
+                Message = "Email settings saved successfully."
+            });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error saving settings: {ex.Message}"));
+        }
+    }
+}

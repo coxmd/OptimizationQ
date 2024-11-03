@@ -1,0 +1,529 @@
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Models.Smtp
+@using QueueManagementSystem.MVC.Services
+@using FastReport
+@using FastReport.Export.PdfSimple;
+@using FastReport.Export.Pdf;
+@using QueueManagementSystem.MVC.Models.Configurations;
+@implements IAsyncDisposable
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ITicketService TicketService
+@inject IEmailSenderService EmailSenderService
+@inject IReportService ReportService
+@inject ISmsService smsService
+@inject IConfigurationService ConfigurationService
+@inject IFingerprintService FingerprintService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@inject ILogger<Services> Logger
+@inject ToastService ToastService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+@if (offeredServices == null)
+{
+    <h4 class="display-4">Services Loading...</h4>
+}
+else
+{
+    <div class="row">
+        @foreach (var service in offeredServices)
+        {
+            <div class="col-sm-4">
+                <div class="clickable-card mb-4" @onclick="() => OpenCustomerInfoModal(service.Name)">
+                    <Card Color="CardColor.Light" TextAlignment="Alignment.Center" Style="min-height:140px;">
+                        <CardBody>
+                            <CardTitle>@service.Name</CardTitle>
+                            <CardText>@service.Description</CardText>
+                        </CardBody>
+                    </Card>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<Modal @ref="customerInfoModal" Title="Customer Information" UseStaticBackdrop="true" CloseOnEscape="false">
+    <BodyTemplate>
+        <div class="row">
+            @if (isFingerprintEnabled)
+            {
+                <div class="col-md-4">
+                    <div class="fingerprint-section">
+                        <div class="fingerprint-icon">
+                            <i class="fas fa-fingerprint fa-2x"></i>
+                        </div>
+
+
+                        <div>@statusMessage</div>
+
+                    </div>
+                </div>
+            }
+
+            @if (isFormEnabled)
+            {
+                <div class="col-md-@(isFingerprintEnabled ? "6" : "12")">
+                    <EditForm Model="@customerInfo" autocomplete="off" OnValidSubmit="HandleServiceSelection">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+                        @if (formFields?.ShowIdNumber ?? true)
+                        {
+                            <div class="mb-3">
+                                <label for="customerIdNumber" class="form-label">
+                                    National ID Number @(formFields?.RequireIdNumber ?? true ? "*" : "")
+                                </label>
+                                <InputText id="customerIdNumber"
+                                           class="form-control"
+                                           @bind-Value="customerInfo.Idnumber"
+                                           required="@(formFields?.RequireIdNumber ?? true)"
+                                           placeholder="Enter your ID number" />
+                                <ValidationMessage For="@(() => customerInfo.Idnumber)" />
+                            </div>
+                        }
+                        @if (formFields?.ShowName ?? true)
+                        {
+                            <div class="mb-3">
+                                <label for="customerName" class="form-label">
+                                    Name @(formFields?.RequireName ?? true ? "*" : "")
+                                </label>
+                                <InputText id="customerName"
+                                           class="form-control"
+                                           @bind-Value="customerInfo.Name"
+                                           required="@(formFields?.RequireName ?? true)"
+                                           placeholder="Enter your name" />
+                                <ValidationMessage For="@(() => customerInfo.Name)" />
+                            </div>
+                        }
+                        @if (formFields?.ShowPhoneNumber ?? true)
+                        {
+                            <div class="mb-3">
+                                <label for="customerPhoneNumber" class="form-label">
+                                    Phone Number @(formFields?.RequirePhoneNumber ?? true ? "*" : "")
+                                </label>
+                                <InputText id="customerPhoneNumber"
+                                           class="form-control"
+                                           @bind-Value="customerInfo.PhoneNumber"
+                                           required="@(formFields?.RequirePhoneNumber ?? true)"
+                                           placeholder="Enter your phone number" />
+                                <ValidationMessage For="@(() => customerInfo.PhoneNumber)" />
+                            </div>
+                        }
+                        @if (formFields?.ShowEmail ?? false)
+                        {
+                            <div class="mb-3">
+                                <label for="customerEmail" class="form-label">
+                                    Email @(formFields?.RequireEmail ?? false ? "*" : "")
+                                </label>
+                                <InputText id="customerEmail"
+                                           class="form-control"
+                                           @bind-Value="customerInfo.Email"
+                                           required="@(formFields?.RequireEmail ?? false)"
+                                           placeholder="Enter your email" />
+                                <ValidationMessage For="@(() => customerInfo.Email)" />
+                            </div>
+                        }
+                        <div class="row">
+                            <div class="col-md-12 text-right">
+                                <Button Type="ButtonType.Button" Color="ButtonColor.Danger" Class="float-end" @onclick="CloseCustomerInfoModal">Cancel</Button>
+                                <Button Type="ButtonType.Submit" Color="ButtonColor.Primary" Class="float-end me-2" Disabled="@isProcessing">
+                                    @if (isProcessing)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        <span class="visually-hidden">Loading...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Submit</span>
+                                    }
+                                </Button>
+                            </div>
+                        </div>
+                    </EditForm>
+
+                </div>
+            }
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<style>
+    .clickable-card {
+        cursor: pointer;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        transition: transform 0.3s ease;
+    }
+
+        .clickable-card:hover {
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            transform: scale(1.04);
+        }
+
+    .card:hover {
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .row {
+        overflow: hidden;
+    }
+
+    .qr-code {
+        z-index: 10;
+        margin-top: 2px;
+    }
+
+    .fingerprint-section {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+    }
+
+        .fingerprint-section.authenticated {
+            background-color: rgba(0, 255, 0, 0.1);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .fingerprint-section.error {
+            border-color: #dc3545;
+        }
+
+    .fingerprint-icon {
+        font-size: 3rem;
+        color: #007bff;
+        margin-bottom: 1rem;
+    }
+
+    .scanning-indicator {
+        text-align: center;
+        margin-top: 1rem;
+    }
+
+    .invalid-feedback {
+        display: block;
+        color: #dc3545;
+        font-size: 0.875em;
+        margin-top: 0.25rem;
+    }
+
+    .is-invalid {
+        border-color: #dc3545;
+        padding-right: calc(1.5em + 0.75rem);
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+        background-repeat: no-repeat;
+        background-position: right calc(0.375em + 0.1875rem) center;
+        background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    }
+
+    .form-control:focus {
+        border-color: #86b7fe;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .form-control.is-invalid:focus {
+        border-color: #dc3545;
+        box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25);
+    }
+</style>
+
+@code {
+    private string statusMessage = "Scan your fingerprint...";
+    private DotNetObjectReference<Services>? objRef;
+
+
+    private bool showFingerprintSection = false;
+    private bool showInfoSection = true;
+    private bool isMobileVersion => NavigationManager.Uri.Contains("/services-mobile");
+    private List<Service> offeredServices;
+    private Ticket currentTicket;
+    private Modal customerInfoModal;
+    private Modal ticketInfoModal;
+    private string selectedServiceName;
+    private CustomerInfo customerInfo = new CustomerInfo();
+    private bool isProcessing = false;
+    private string fingerprintStatus = "";
+    private string fingerprintMessage = "";
+    private bool isInitialized = false;
+    private bool isDeviceOpen = false;
+    private bool isScanning = false;
+    private Timer scanningTimer;
+    private const int MAX_ATTEMPTS = 3;
+    private int fingerprintAttempts = 0;
+    private FormFieldConfiguration formFields;
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    // Configuration flags
+    private bool isFingerprintEnabled;
+    private bool isFormEnabled;
+
+
+    private async Task GenerateTicketAsync()
+    {
+        try
+        {
+            currentTicket = await TicketService.GenerateTicketAsync(selectedServiceName, customerInfo.Name, customerInfo.PhoneNumber, customerInfo.Idnumber);
+
+            using var context = DbFactory.CreateDbContext();
+            var servicePoint = await context.ServicePoints.FirstOrDefaultAsync(t => t.Id == currentTicket.ServicePointId);
+
+            // Send SMS (Uncomment if needed)
+            // await smsService.SendSmsAsync(currentTicket.CustomerPhoneNumber, $"Welcome {customerInfo.Name}, Your ticket number is {currentTicket.TicketNumber} for {currentTicket.ServiceName}. Please wait at {servicePoint.Name}");
+
+            if (isMobileVersion)
+            {
+                NavigationManager.NavigateTo($"Queue/TicketTrackingPage/{currentTicket.TicketNumber}", true);
+
+                // Send Email if provided
+                if (!string.IsNullOrEmpty(currentTicket.IdNumber))
+                {
+                    // var message = new EmailMessageModel
+                    //     {
+                    //         Recipients = new[] { currentTicket.CustomerEmail },
+                    //         Subject = "Your Ticket Information",
+                    //         Body = $@"
+                    // <html>
+                    //     <body style='font-family: Arial, sans-serif;'>
+                    //         <div style='max-width: 600px; margin: auto; border: 1px solid #ccc; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); overflow: hidden;'>
+                    //             <!-- Header -->
+                    //             <div style='background-color: #164799; padding: 20px; text-align: center;'>
+                    //                 <h1 style='margin: 0; color: white; font-size: 2em;'>Queue Management System</h1>
+                    //             </div>
+                    //             <!-- Body -->
+                    //             <div style='padding: 20px; text-align: center;'>
+                    //                 <h2 style='color: #333;'>Your Ticket Information</h2>
+                    //                 <p style='color: #555; font-size: 18px;'>Thank you for using our service. Here are your ticket details:</p>
+                    //                 <div style='background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;'>
+                    //                     <p style='margin: 5px 0; font-size: 22px;'><strong>Ticket Number:</strong> {currentTicket.TicketNumber}</p>
+                    //                     <p style='margin: 5px 0; font-size: 22px;'><strong>Service:</strong> {currentTicket.ServiceName}</p>
+                    //                     <p style='margin: 5px 0; font-size: 22px;'><strong>Checkin Time:</strong> {currentTicket.PrintTime}</p>
+                    //                 </div>
+                    //                 <p style='color: #555;'>Please keep this information handy for your reference.</p>
+                    //             </div>
+                    //             <!-- Footer -->
+                    //             <div style='background-color: #f9f9f9; padding: 20px; text-align: center;'>
+                    //                 <p style='color: #555;'>If you have any questions, please contact our support team.</p>
+                    //                 <div style='margin-top: 20px;'>
+                    //                     <a href='https://www.hanmak.co.ke/contact-us/' style='display: inline-block; padding: 10px 20px; font-size: 16px; color: #fff; background-color: #007BFF; text-decoration: none; border-radius: 5px;'>Contact Support</a>
+                    //                 </div>
+                    //             </div>
+                    //         </div>
+                    //     </body>
+                    // </html>"
+                    //     };
+                    // await EmailSenderService.SendEmailAsync(message);
+
+                    // Send SMS if needed
+                    // await smsService.SendSmsAsync(currentTicket.CustomerPhoneNumber, $"Your ticket number is {currentTicket.TicketNumber} for {currentTicket.ServiceName}.");
+                }
+                else
+                {
+                    // Existing print logic for desktop
+                    var base64Pdf = await GenerateTicketPdfBase64(currentTicket);
+                    await JS.InvokeVoidAsync("printTicket", base64Pdf);
+                    await CloseCustomerInfoModal();
+                }
+
+                await CloseCustomerInfoModal();
+            }
+            else
+            {
+                isProcessing = false;
+                await CloseCustomerInfoModal();
+                customerInfo = new CustomerInfo();
+                var base64Pdf = await GenerateTicketPdfBase64(currentTicket);
+                await JS.InvokeVoidAsync("printTicket", base64Pdf);
+            }
+        }
+        catch (Exception ex)
+        {
+            isProcessing = false;
+            await CloseCustomerInfoModal();
+            customerInfo = new CustomerInfo();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Ticket already exists in Queue",
+                    Message = $"You already have an active ticket"
+                });
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+
+        await FingerprintService.CloseDeviceAsync();
+        objRef?.Dispose();
+    }
+
+    private async Task<string> GenerateTicketPdfBase64(Ticket ticket)
+    {
+        Report report = ReportService.GenerateTicketReport(ticket);
+        using (MemoryStream strm = new MemoryStream())
+        {
+            PDFExport pdfExport = new PDFExport();
+            pdfExport.Export(report, strm);
+            return Convert.ToBase64String(strm.ToArray());
+        }
+    }
+
+    private async Task OpenCustomerInfoModal(string serviceName)
+    {
+        selectedServiceName = serviceName;
+        fingerprintAttempts = 0; // Reset the attempts for new customer
+        fingerprintMessage = ""; // Clear previous messages
+        selectedServiceName = serviceName;
+        await customerInfoModal.ShowAsync();
+    }
+
+    private async Task CloseCustomerInfoModal()
+    {
+        await customerInfoModal.HideAsync();
+        ResetForm();
+    }
+
+    private void ResetForm()
+    {
+        customerInfo = new CustomerInfo();
+        isProcessing = false;
+        fingerprintStatus = "";
+        fingerprintMessage = "";
+    }
+
+    private async Task HandleServiceSelection()
+    {
+        showInfoSection = false;
+        showFingerprintSection = true;
+        isProcessing = true;
+        await GenerateTicketAsync();
+    }
+
+    private async Task ShowTicketInfoModal()
+    {
+        await ticketInfoModal.ShowAsync();
+    }
+
+    private async Task CloseTicketInfoModal()
+    {
+        await ticketInfoModal.HideAsync();
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await FingerprintService.InitializeAsync();
+        await base.OnInitializedAsync();
+        // Load configuration
+        isFingerprintEnabled = await ConfigurationService.GetBoolConfigurationAsync("FingerprintEnabled");
+        isFormEnabled = await ConfigurationService.GetBoolConfigurationAsync("FormEnabled");
+        formFields = await ConfigurationService.GetFormFieldConfigurationAsync();
+
+        // Initialize fingerprint device if enabled
+        if (isFingerprintEnabled)
+        {
+            isInitialized = await FingerprintService.InitializeAsync();
+            if (isInitialized)
+            {
+                isDeviceOpen = true;
+            }
+        }
+
+        using var context = DbFactory.CreateDbContext();
+        offeredServices = await context.Services.ToListAsync();
+        StateHasChanged();
+    }
+
+    [JSInvokable("ReceiveFingerprintData")]
+    public async Task ReceiveFingerprintData(string fingerprintData)
+    {
+        // Call a controller to send fingerprintData for matching
+        try
+        {
+
+            byte[] fingerprintBytes = Convert.FromBase64String(fingerprintData);
+            statusMessage = "Received data";
+            int lenth = fingerprintBytes.Length;
+
+            CustomerInfo customer = new CustomerInfo();
+            customer.FingerPrintData = fingerprintBytes;
+
+            // Send to the controller for matching
+            var response = await FingerprintService.MatchFingerPrintAsync(customer);
+
+            if (response.IsAuthenticated)
+            {
+                statusMessage = "Fingerprint matched successfully." + response.Message;
+            }
+            else
+            {
+                statusMessage = "Fingerprint match failed.";
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            StateHasChanged();
+            // Log the error or throw an exception with a descriptive message
+            throw new InvalidOperationException("Error in receiving fingerprint data", ex);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("startWebSocket", objRef);
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+}
+
+<script>
+    window.printTicket = function (base64pdf) {
+        return new Promise((resolve) => {
+            var blob = b64toBlob(base64pdf, 'application/pdf');
+            var blobUrl = URL.createObjectURL(blob);
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+
+            iframe.onload = function () {
+                setTimeout(function () {
+                    iframe.contentWindow.print();
+                    iframe.onafterprint = function () {
+                        document.body.removeChild(iframe);
+                        URL.revokeObjectURL(blobUrl);
+                        resolve();
+                    };
+                }, 1000);
+            };
+        });
+    };
+
+    function b64toBlob(b64Data, contentType = '', sliceSize = 512) {
+        const byteCharacters = atob(b64Data);
+        const byteArrays = [];
+
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            const slice = byteCharacters.slice(offset, offset + sliceSize);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+
+        const blob = new Blob(byteArrays, { type: contentType });
+        return blob;
+    }
+</script>

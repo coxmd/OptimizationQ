@@ -1,0 +1,17 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Manage Adverts";
+}
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+
+    <div>
+        @(await Html.RenderComponentAsync<AdvertsManagement>(RenderMode.ServerPrerendered))
+    </div>
+</body>
+</html>
+

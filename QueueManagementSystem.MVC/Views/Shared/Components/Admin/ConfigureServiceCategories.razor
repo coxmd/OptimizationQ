@@ -1,0 +1,263 @@
+﻿@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.ComponentModel.DataAnnotations
+@using System.Text.Json
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2">
+    <div class="row">
+        <h4>@(isEditing ? "Edit Service Category" : "Create New Service Category")</h4>
+        <EditForm Model="@newCategory" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="newCategory.Name" />
+                        <ValidationMessage For="@(() => newCategory.Name)" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Description <span class="text-danger">*</span></label>
+                        <InputTextArea class="form-control" @bind-Value="newCategory.Description" />
+                        <ValidationMessage For="@(() => newCategory.Description)" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        @if (isEditing)
+                        {
+                            <span>Update</span>
+                        }
+                        else
+                        {
+                            <span>Create</span>
+                        }
+                    </Button>
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Success" hidden="@isButtonInVisible" Size="ButtonSize.Small" @onclick="CreateNew" Class="float-end me-2">New</Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+<br />
+<br />
+
+<ConfirmDialog @ref="deleteDialog" />
+
+@if (categories == null)
+{
+    <h4>Service Categories Loading...</h4>
+}
+else
+{
+    <div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+        <Grid @ref="grid" TItem="ServiceCategory" Class="table table-bordered table-light table-sm compact-grid" Data="categories" AllowPaging="true"
+              PageSize="10"
+              SelectionMode="GridSelectionMode.Single"
+              AllowSorting="true"
+              AllowRowClick="true"
+              EmptyText="No records to display"
+              PageSizeSelectorVisible="true"
+              PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              OnRowClick="OnRowSelected"
+              Responsive="true"
+              RowClass="@(x => x == newCategory ? "selected-row" : "")">
+            <GridColumn TItem="ServiceCategory" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+                @context.Id
+            </GridColumn>
+            <GridColumn TItem="ServiceCategory" HeaderText="Name" SortString="Name" SortKeySelector="item => item.Name">
+                @context.Name
+            </GridColumn>
+            <GridColumn TItem="ServiceCategory" HeaderText="Description" SortString="Description" SortKeySelector="item => item.Description">
+                @context.Description
+            </GridColumn>
+            <GridColumn TItem="ServiceCategory" HeaderText="Services Count" SortString="ServicesCount" SortKeySelector="item => item.Services.Count">
+                @context.Services.Count
+            </GridColumn>
+            <GridColumn TItem="ServiceCategory" HeaderText="Actions">
+                <Button Size="ButtonSize.Small" Color="ButtonColor.Danger" @onclick="@(() => OnDeleteAsync(context))">Delete</Button>
+            </GridColumn>
+
+        </Grid>
+    </div>
+}
+
+<style>
+    .selected-row {
+        background-color: #daf1de;
+    }
+
+    .table-sm {
+        font-size: 0.875rem;
+    }
+
+        .table-sm td, .table-sm th {
+            padding: 0.25rem;
+        }
+
+    .p-1 {
+        padding: 0.25rem;
+    }
+
+    .grid-header, .grid-row {
+        line-height: 0.4;
+    }
+</style>
+
+@code {
+    private List<ServiceCategory>? categories;
+    private ConfirmDialog deleteDialog = default!;
+    private ServiceCategory newCategory = new ServiceCategory();
+    List<ToastMessage> messages = new List<ToastMessage>();
+    private Grid<ServiceCategory>? grid;
+    private bool isEditing = false;
+    private bool isButtonInVisible = true;
+    private int? selectedRowId;
+
+    private void OnRowSelected(GridRowEventArgs<ServiceCategory> args)
+    {
+        newCategory = args.Item;
+        selectedRowId = args.Item.Id;
+        isButtonInVisible = false;
+        isEditing = true;
+    }
+
+    private void CreateNew()
+    {
+        isButtonInVisible = true;
+        isEditing = false;
+        newCategory = new ServiceCategory();
+    }
+
+    private async Task OnValidFormSubmit()
+    {
+        if (isEditing)
+        {
+            await UpdateServiceCategory();
+        }
+        else
+        {
+            await CreateServiceCategory();
+        }
+
+        newCategory = new ServiceCategory();
+        isEditing = false;
+        await grid.RefreshDataAsync();
+    }
+
+    private async Task CreateServiceCategory()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            await context.ServiceCategories.AddAsync(newCategory);
+            await context.SaveChangesAsync();
+            categories = await context.ServiceCategories.Include(c => c.Services).OrderBy(c => c.Id).ToListAsync();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "Service category added successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task UpdateServiceCategory()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.ServiceCategories.Update(newCategory);
+            await context.SaveChangesAsync();
+            categories = await context.ServiceCategories.Include(c => c.Services).OrderBy(c => c.Id).ToListAsync();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "Service category updated successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task OnDeleteAsync(ServiceCategory category)
+    {
+        var confirmation = await deleteDialog.ShowAsync(
+            title: "Are you sure you want to delete this category?",
+            message1: "This will delete the category. Once deleted, it cannot be rolled back.");
+
+        if (confirmation)
+        {
+            try
+            {
+                using var context = DbFactory.CreateDbContext();
+                var categoryToDelete = await context.ServiceCategories
+                    .Include(c => c.Services)
+                    .FirstOrDefaultAsync(c => c.Id == category.Id);
+
+                if (categoryToDelete == null)
+                {
+                    ToastService.Notify(new(ToastType.Danger, "Category not found."));
+                    return;
+                }
+
+                if (categoryToDelete.Services.Count > 0)
+                {
+                    ToastService.Notify(new(ToastType.Warning, "Cannot delete category. It is linked to one or more services."));
+                    return;
+                }
+
+                context.ServiceCategories.Remove(categoryToDelete);
+                await context.SaveChangesAsync();
+                await RefreshCategoriesData(context);
+                ToastService.Notify(new(ToastType.Success, "Service category deleted successfully."));
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+            }
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage(ToastType.Secondary, "Delete action canceled."));
+        }
+    }
+
+    private async Task RefreshCategoriesData(QueueManagementSystemContext context)
+    {
+        categories = await context.ServiceCategories
+            .Include(c => c.Services)
+            .OrderBy(c => c.Id)
+            .ToListAsync();
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        categories = await context.ServiceCategories.Include(c => c.Services).OrderBy(c => c.Id).ToListAsync();
+    }
+}

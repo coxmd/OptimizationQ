@@ -1,0 +1,194 @@
+﻿@using System.IO
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+@inject IWebHostEnvironment Environment
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2;">
+    <h4>Advert Management</h4>
+
+    <div class="mb-3">
+        <InputFile OnChange="@OnFileChange" accept="video/*" />
+    </div>
+
+    <div class="mb-3">
+        <Button Type="ButtonType.Button" Color="ButtonColor.Primary" @onclick="@UploadAdvert" Disabled="@(!isFileSelected)">
+            Upload Advert
+        </Button>
+    </div>
+
+    @if (adverts != null && adverts.Any())
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Order</th>
+                    <th>Name</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < adverts.Count; i++)
+                {
+                    var advert = adverts[i];
+                    var index = i;
+                    <tr>
+                        <td>@(i + 1)</td>
+                        <td>@advert.Name</td>
+                        <td>
+                            <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" @onclick="@(() => MoveAdvert(index, -1))" Disabled="@(index == 0)">
+                                <i class="fas fa-arrow-up"></i>
+                            </Button>
+                            <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" @onclick="@(() => MoveAdvert(index, 1))" Disabled="@(index == adverts.Count - 1)">
+                                <i class="fas fa-arrow-down"></i>
+                            </Button>
+                            <Button Type="ButtonType.Button" Color="ButtonColor.Danger" @onclick="@(() => DeleteAdvert(advert.Id))">
+                                Delete
+                            </Button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        <p>No adverts uploaded yet.</p>
+    }
+</div>
+
+@code {
+    private List<Advert> adverts;
+    private IBrowserFile selectedFile;
+    private bool isFileSelected = false;
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAdverts();
+    }
+
+    private async Task LoadAdverts()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        adverts = await context.Adverts.OrderBy(a => a.Order).ToListAsync();
+    }
+
+    private void OnFileChange(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        isFileSelected = true;
+    }
+
+    private async Task UploadAdvert()
+    {
+        if (selectedFile == null)
+        {
+            ToastService.Notify(new(ToastType.Warning, "Please select a file to upload."));
+            return;
+        }
+
+        if (selectedFile.Size > 100 * 1024 * 1024) // 100 MB limit
+        {
+            ToastService.Notify(new(ToastType.Warning, "File size should not exceed 100 MB."));
+            return;
+        }
+
+        var fileName = Path.GetFileNameWithoutExtension(selectedFile.Name);
+        var extension = Path.GetExtension(selectedFile.Name);
+        var newFileName = $"{fileName}_{DateTime.Now:ddMMyyyy}{extension}";
+        var path = Path.Combine(Environment.WebRootPath, "Adverts", newFileName);
+
+        await using var fs = new FileStream(path, FileMode.Create);
+        await selectedFile.OpenReadStream(100 * 1024 * 1024).CopyToAsync(fs);
+
+        // TODO: Implement video compression here
+
+        // var duration = await GetVideoDuration(path); // Implement this method to get video duration
+
+        // if (duration > 600) // 10 minutes
+        // {
+        //     File.Delete(path);
+        //     ToastService.Notify(new(ToastType.Warning, "Video duration should not exceed 10 minutes."));
+        //     return;
+        // }
+
+        using var context = await DbFactory.CreateDbContextAsync();
+        var maxOrder = await context.Adverts.MaxAsync(a => (int?)a.Order) ?? 0;
+        var advert = new Advert
+            {
+                Name = newFileName,
+                Path = $"/Adverts/{newFileName}",
+                Order = maxOrder + 1 // Set the new advert to be last in order
+            };
+
+        context.Adverts.Add(advert);
+        await context.SaveChangesAsync();
+
+        await LoadAdverts();
+        ToastService.Notify(new(ToastType.Success, "Advert uploaded successfully."));
+        isFileSelected = false;
+    }
+
+    private async Task MoveAdvert(int index, int direction)
+    {
+        if ((index == 0 && direction == -1) || (index == adverts.Count - 1 && direction == 1))
+            return;
+
+        var advertToMove = adverts[index];
+        var otherAdvert = adverts[index + direction];
+
+        // Swap the Order values
+        (advertToMove.Order, otherAdvert.Order) = (otherAdvert.Order, advertToMove.Order);
+
+        using var context = await DbFactory.CreateDbContextAsync();
+        context.Adverts.UpdateRange(advertToMove, otherAdvert);
+        await context.SaveChangesAsync();
+
+        await LoadAdverts();
+        ToastService.Notify(new(ToastType.Success, "Advert order updated successfully."));
+    }
+
+    private async Task DeleteAdvert(int id)
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        var advert = await context.Adverts.FindAsync(id);
+
+        if (advert != null)
+        {
+            var filePath = Path.Combine(Environment.WebRootPath, advert.Path.TrimStart('/'));
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            context.Adverts.Remove(advert);
+            await context.SaveChangesAsync();
+
+            // Reorder remaining adverts
+            var remainingAdverts = await context.Adverts.OrderBy(a => a.Order).ToListAsync();
+            for (int i = 0; i < remainingAdverts.Count; i++)
+            {
+                remainingAdverts[i].Order = i + 1;
+            }
+            context.Adverts.UpdateRange(remainingAdverts);
+            await context.SaveChangesAsync();
+
+            await LoadAdverts();
+            ToastService.Notify(new(ToastType.Success, "Advert deleted successfully."));
+        }
+    }
+
+    private Task<int> GetVideoDuration(string path)
+    {
+        // TODO: Implement video duration retrieval
+        return Task.FromResult(0);
+    }
+}

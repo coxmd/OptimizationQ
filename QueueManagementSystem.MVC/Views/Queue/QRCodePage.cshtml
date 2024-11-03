@@ -1,0 +1,16 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Scan QRCode";
+}
+
+@{
+    Layout = "_LayoutNoNav";
+}
+
+<div class="text-center m-2">
+    <h3>Please Scan the QRCODE to join the queue</h3><br />
+
+</div>
+<div>
+    @(await Html.RenderComponentAsync<QRCode>(RenderMode.ServerPrerendered))
+</div>

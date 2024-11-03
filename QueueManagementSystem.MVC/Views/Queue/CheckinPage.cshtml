@@ -1,0 +1,21 @@
+@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Check-In";
+}
+
+@{
+    Layout = "_LayoutNoNav";
+}
+
+
+
+
+<div class="text-center m-2">
+    <h3>Click a Service to Select</h3><br />
+
+</div>
+
+<div >
+    @(await Html.RenderComponentAsync<Services>(RenderMode.ServerPrerendered))
+</div>
+        

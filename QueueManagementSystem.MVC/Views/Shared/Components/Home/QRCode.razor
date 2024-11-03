@@ -1,0 +1,33 @@
+﻿@inject NavigationManager NavigationManager
+@using QRCoder
+@inject IJSRuntime JS
+
+@namespace QueueManagementSystem.MVC.Components
+
+
+<div id="qrCode"></div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var url = NavigationManager.ToAbsoluteUri("Queue/services-mobile").ToString();
+            var qrGenerator = new QRCodeGenerator();
+            var qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+            var qrCode = new BitmapByteQRCode(qrCodeData);
+            var qrCodeImage = qrCode.GetGraphic(7);
+            var qrCodeImageBase64 = Convert.ToBase64String(qrCodeImage);
+
+            await JS.InvokeVoidAsync("displayQRCode", qrCodeImageBase64);
+        }
+    }
+}
+
+<script>
+    window.displayQRCode = function (base64Image) {
+        var img = document.createElement("img");
+        img.src = "data:image/png;base64," + base64Image;
+        document.getElementById("qrCode").appendChild(img);
+    }
+</script>

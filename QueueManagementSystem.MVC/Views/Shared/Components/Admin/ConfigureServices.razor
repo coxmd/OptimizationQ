@@ -1,0 +1,272 @@
+@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.ComponentModel.DataAnnotations
+@using System.Text.Json
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2">
+    <div class="row">
+        <h4>@(isEditing ? "Edit Service" : "Create New Service")</h4>
+        <EditForm Model="@newService" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="newService.Name" />
+                        <ValidationMessage For="@(() => newService.Name)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category <span class="text-danger">*</span></label>
+                        <InputSelect class="form-control" @bind-Value="newService.ServiceCategoryId">
+                            <option value="">-- Select Category --</option>
+                            @foreach (var category in categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => newService.ServiceCategoryId)" />
+                    </div>
+                   
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Description <span class="text-danger">*</span></label>
+                        <InputTextArea class="form-control" @bind-Value="newService.Description" />
+                        <ValidationMessage For="@(() => newService.Description)" />
+                    </div>
+                     <div class="mb-3">
+                        <label class="form-label">Active <span class="text-danger">*</span></label>
+                        <Switch class="large-switch" @bind-Value="newService.Active" Label="Is Active?" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        @if (isEditing)
+                        {
+                            <span>Update</span>
+                        }
+                        else
+                        {
+                            <span>Create</span>
+                        }
+                    </Button>
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Success" hidden="@isButtonInVisible" Size="ButtonSize.Small" @onclick="CreateNew" Class="float-end me-2">New</Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+<br />
+<br />
+
+<ConfirmDialog @ref="deleteDialog" />
+
+@if (services == null)
+{
+    <h4>Services Loading...</h4>
+}
+else
+{
+
+     <div class="card" style="padding:20px;background-color:#E6F2F2;color:black"> 
+    <Grid @ref="grid" TItem="Service" Class="table table-bordered table-light table-sm compact-grid" Data="services" AllowPaging="true"
+          PageSize="10"
+          SelectionMode="GridSelectionMode.Single"
+          AllowSorting="true"
+          AllowRowClick="true"
+          Style="background-color:white;"
+          EmptyText="No records to display"
+          PageSizeSelectorVisible="true"
+          PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+          OnRowClick="OnRowSelected"
+          Responsive="true"
+          RowClass="@(x => x == newService ? "selected-row" : "")">
+        <GridColumn TItem="Service" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+
+            
+                @context.Id
+            </GridColumn>
+            <GridColumn TItem="Service" HeaderText="Title" SortString="Name" SortKeySelector="item => item.Name">
+                @context.Name
+            </GridColumn>
+            <GridColumn TItem="Service" HeaderText="Description" SortString="Description" SortKeySelector="item => item.Description">
+                @context.Description
+            </GridColumn>
+            <GridColumn TItem="Service" HeaderText="Category" SortString="ServiceCategory.Name" SortKeySelector="item => item.ServiceCategory.Name">
+                @context.ServiceCategory?.Name
+            </GridColumn>
+            <GridColumn TItem="Service" HeaderText="Is Active" SortString="Active" SortKeySelector="item => item.Active">
+                <Switch Class="large-switch" @bind-Value="context.Active" />
+            </GridColumn>
+        </Grid>
+    </div>
+}
+
+<style>
+    .large-switch {
+        transform: scale(1.5);
+        margin-left: 15.5rem;
+    }
+
+    .selected-row {
+        background-color: #daf1de;
+    }
+
+    .table-sm {
+        font-size: 0.875rem;
+    }
+
+        .table-sm td, .table-sm th {
+            padding: 0.25rem;
+        }
+
+    .p-1 {
+        padding: 0.25rem;
+    }
+
+    .grid-header, .grid-row {
+        line-height: 0.4;
+    }
+</style>
+
+@code {
+    private List<Service>? services;
+    private List<ServiceCategory> categories = new List<ServiceCategory>();
+    private ConfirmDialog deleteDialog = default!;
+    private Service newService = new Service();
+    List<ToastMessage> messages = new List<ToastMessage>();
+    private Grid<Service>? grid;
+    private bool isEditing = false;
+    private bool isButtonInVisible = true;
+    private int? selectedRowId;
+
+    private void OnRowSelected(GridRowEventArgs<Service> args)
+    {
+        newService = args.Item;
+        selectedRowId = args.Item.Id;
+        isButtonInVisible = false;
+        isEditing = true;
+    }
+
+    private void CreateNew()
+    {
+        isButtonInVisible = true;
+        isEditing = false;
+        newService = new Service();
+    }
+
+    private async Task OnValidFormSubmit()
+    {
+        if (isEditing)
+        {
+            await UpdateServiceProvider();
+        }
+        else
+        {
+            await CreateServiceProvider();
+        }
+
+        newService = new Service();
+        isEditing = false;
+        await grid.RefreshDataAsync();
+    }
+
+    private async Task CreateServiceProvider()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Services.Add(newService);
+            context.SaveChanges();
+            await RefreshServicesData(context);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "Service details added successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task UpdateServiceProvider()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Services.Update(newService);
+            context.SaveChanges();
+            await RefreshServicesData(context);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "Service detail edited successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task OnDeleteAsync(Service service)
+    {
+        var confirmation = await deleteDialog.ShowAsync(
+            title: "Are you sure you want to delete this?",
+            message1: "This will delete the record. Once deleted can not be rolled back.");
+
+        if (confirmation)
+        {
+            try
+            {
+                using var context = DbFactory.CreateDbContext();
+                context.Services.Remove(service);
+                context.SaveChanges();
+                await RefreshServicesData(context);
+                ToastService.Notify(new(ToastType.Success, "Service deleted successfully."));
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+            }
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage(ToastType.Secondary, "Delete action canceled."));
+        }
+    }
+
+    private async Task RefreshServicesData(QueueManagementSystemContext context)
+    {
+        services = await context.Services
+            .Include(s => s.ServiceCategory)
+            .OrderBy(s => s.Id)
+            .ToListAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        await RefreshServicesData(context);
+        categories = await context.ServiceCategories.OrderBy(c => c.Name).ToListAsync();
+    }
+}

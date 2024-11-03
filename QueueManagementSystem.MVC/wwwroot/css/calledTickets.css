@@ -1,0 +1,171 @@
+﻿/* Reset and base styles */
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border: 0.5px solid white;
+    background-color: #000;
+}
+
+.display-container {
+    display: flex;
+    background-color: #000;
+    color: #fff;
+    height: 100vh;
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Left column styling */
+.left-column {
+    flex: 3;
+    display: flex;
+    flex-direction: column;
+    border: 0.3px solid white;
+    height: 100%;
+    width: 100%;
+}
+
+/* Ticket display section */
+.ticket-display {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 0.5px solid white;
+    padding: 0;
+    width: 100%;
+}
+
+.ticket-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.ticket-number {
+    font-size: clamp(8rem, 18vw, 18rem); /* Increased font size */
+    font-weight: bold;
+    color: #adff2f; /* Exact green color */
+    line-height: 1;
+    margin: 0;
+    letter-spacing: 0.1em; /* Added letter spacing */
+    text-align: center;
+    width: 100%;
+}
+
+.destination-wrapper {
+    width: 100%;
+    overflow: hidden;
+    padding: 0;
+    text-align: center;
+}
+
+.ticket-destination {
+    font-size: clamp(4rem, 8vw, 8rem); /* Increased font size */
+    color: #adff2f; /* Exact green color */
+    display: inline-block;
+    white-space: nowrap;
+    animation: scroll-left-right 10s linear infinite;
+    letter-spacing: 0.05em; /* Added letter spacing */
+}
+
+/* Advertisement section */
+.advertisement-section {
+    flex: 1;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+}
+
+    .advertisement-section h3 {
+        position: absolute;
+        top: 1vh;
+        left: 2vw;
+        margin: 0;
+        z-index: 1;
+        font-size: clamp(1rem, 2vw, 2rem);
+        color: #fff;
+    }
+
+.advertisement-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    min-width: 100%;
+    min-height: 100%;
+    width: auto;
+    height: auto;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+}
+
+/* Right column styling */
+.right-column {
+    flex: 1.4;
+    background-color: #000;
+    padding: 2vh 2vw;
+    overflow-y: auto;
+    border-left: 0.3px solid white;
+}
+
+.waiting-queue {
+    display: flex;
+    flex-direction: column;
+    gap: 2vh;
+}
+
+.waiting-ticket {
+    font-size: clamp(2rem, 4vw, 4rem);
+    border: 1px solid lightblue;
+    padding: 1vh;
+    color: #adff2f;
+    text-align: center;
+    border-radius: 10px;
+}
+
+.waiting-number {
+    font-weight: bold;
+    display: block;
+    font-size: 1.2em;
+}
+
+.waiting-destination {
+    display: block;
+    font-size: 0.8em;
+    color: #adff2f;
+}
+
+@keyframes scroll-left-right {
+    0%, 100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-25%);
+    }
+
+    75% {
+        transform: translateX(25%);
+    }
+}
+
+/* Utility classes */
+.no-tickets {
+    font-size: clamp(1.5rem, 2vw, 2rem);
+    text-align: center;
+}

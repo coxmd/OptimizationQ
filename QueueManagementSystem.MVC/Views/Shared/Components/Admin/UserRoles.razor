@@ -1,0 +1,252 @@
+﻿@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.ComponentModel.DataAnnotations
+@using System.Text.Json
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2">
+    <div class="row">
+        <h4>@(isEditing ? "Edit UserRole" : "Create New UserRole")</h4>
+        <EditForm Model="@newRole" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="newRole.Name" />
+                        <ValidationMessage For="@(() => newRole.Name)" />
+                    </div>
+                
+
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Description <span class="text-danger">*</span></label>
+                        <InputTextArea class="form-control" @bind-Value="newRole.Description" />
+                        <ValidationMessage For="@(() => newRole.Description)" />
+                    </div>
+                    
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        @if (isEditing)
+                        {
+                            <span>Update</span>
+                        }
+                        else
+                        {
+                            <span>Create</span>
+                        }
+                    </Button>
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Success" hidden="@isButtonInVisible" Size="ButtonSize.Small" @onclick="CreateNew" Class="float-end me-2">New</Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+<br />
+<br />
+
+<ConfirmDialog @ref="deleteDialog" />
+
+@if (roles == null)
+{
+    <h4>Roles Loading...</h4>
+}
+else
+{
+
+    <div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+        <Grid @ref="grid" TItem="UserRole" Class="table table-bordered table-light table-sm compact-grid" Data="roles" AllowPaging="true"
+              PageSize="10"
+              SelectionMode="GridSelectionMode.Single"
+              AllowSorting="true"
+              AllowRowClick="true"
+              Style="background-color:white;"
+              EmptyText="No records to display"
+              PageSizeSelectorVisible="true"
+              PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              OnRowClick="OnRowSelected"
+              Responsive="true"
+              RowClass="@(x => x == newRole ? "selected-row" : "")">
+            <GridColumn TItem="UserRole" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+
+
+                @context.Id
+            </GridColumn>
+            <GridColumn TItem="UserRole" HeaderText="Role" SortString="Name" SortKeySelector="item => item.Name">
+                @context.Name
+            </GridColumn>
+            <GridColumn TItem="UserRole" HeaderText="Description" SortString="Description" SortKeySelector="item => item.Description">
+                @context.Description
+            </GridColumn>
+           
+        </Grid>
+    </div>
+}
+
+<style>
+    .large-switch {
+        transform: scale(1.5);
+        margin-left: 15.5rem;
+    }
+
+    .selected-row {
+        background-color: #daf1de;
+    }
+
+    .table-sm {
+        font-size: 0.875rem;
+    }
+
+        .table-sm td, .table-sm th {
+            padding: 0.25rem;
+        }
+
+    .p-1 {
+        padding: 0.25rem;
+    }
+
+    .grid-header, .grid-row {
+        line-height: 0.4;
+    }
+</style>
+
+@code {
+    private List<UserRole>? roles;
+    private ConfirmDialog deleteDialog = default!;
+    private UserRole newRole = new UserRole();
+    List<ToastMessage> messages = new List<ToastMessage>();
+    private Grid<UserRole>? grid;
+    private bool isEditing = false;
+    private bool isButtonInVisible = true;
+    private int? selectedRowId;
+
+    private void OnRowSelected(GridRowEventArgs<UserRole> args)
+    {
+        newRole = args.Item;
+        selectedRowId = args.Item.Id;
+        isButtonInVisible = false;
+        isEditing = true;
+    }
+
+    private void CreateNew()
+    {
+        isButtonInVisible = true;
+        isEditing = false;
+        newRole = new UserRole();
+    }
+
+    private async Task OnValidFormSubmit()
+    {
+        if (isEditing)
+        {
+            await UpdateServiceProvider();
+        }
+        else
+        {
+            await CreateServiceProvider();
+        }
+
+        newRole = new UserRole();
+        isEditing = false;
+        await grid.RefreshDataAsync();
+    }
+
+    private async Task CreateServiceProvider()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Roles.Add(newRole);
+            context.SaveChanges();
+            await RefreshServicesData(context);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "UserRole added successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task UpdateServiceProvider()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Roles.Update(newRole);
+            context.SaveChanges();
+            await RefreshServicesData(context);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "UserRole edited successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private async Task OnDeleteAsync(UserRole role)
+    {
+        var confirmation = await deleteDialog.ShowAsync(
+            title: "Are you sure you want to delete this?",
+            message1: "This will delete the record. Once deleted can not be rolled back.");
+
+        if (confirmation)
+        {
+            try
+            {
+                using var context = DbFactory.CreateDbContext();
+                context.Roles.Remove(role);
+                context.SaveChanges();
+                await RefreshServicesData(context);
+                ToastService.Notify(new(ToastType.Success, "UserRole deleted successfully."));
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+            }
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage(ToastType.Secondary, "Delete action canceled."));
+        }
+    }
+
+    private async Task RefreshServicesData(QueueManagementSystemContext context)
+    {
+        roles = await context.Roles
+            .OrderBy(s => s.Id)
+            .ToListAsync();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        await RefreshServicesData(context);
+        
+    }
+}

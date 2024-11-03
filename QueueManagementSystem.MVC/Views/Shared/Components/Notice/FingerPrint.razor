@@ -1,0 +1,76 @@
+﻿@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@inject IFingerprintService FingerprintService
+@inject IJSRuntime JS
+
+@namespace QueueManagementSystem.MVC.Components
+<h3>Fingerprint Data Matching</h3>
+
+<div id="status">@statusMessage</div>
+
+@code {
+    private string statusMessage = "Waiting for fingerprint data...";
+    private DotNetObjectReference<FingerPrint>? objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await FingerprintService.InitializeAsync();
+        await base.OnInitializedAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            //await JS.InvokeVoidAsync("startFingerprintPolling", objRef);
+            await JS.InvokeVoidAsync("startWebSocket", objRef);
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    [JSInvokable("ReceiveFingerprintData")]
+    public async Task ReceiveFingerprintData(string fingerprintData)
+    {
+        // Call a controller to send fingerprintData for matching
+        try
+        {
+            
+            byte[] fingerprintBytes = Convert.FromBase64String(fingerprintData);
+            statusMessage = "Received data";
+            int lenth = fingerprintBytes.Length;
+
+            CustomerInfo customer = new CustomerInfo();
+            customer.FingerPrintData = fingerprintBytes;
+
+            // Send to the controller for matching
+            var response = await FingerprintService.MatchFingerPrintAsync(customer);
+
+            if (response.IsAuthenticated)
+            {
+                statusMessage = "Fingerprint matched successfully." + response.Message;
+            }
+            else
+            {
+                statusMessage = "Fingerprint match failed.";
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"Error: {ex.Message}";
+            StateHasChanged();
+            // Log the error or throw an exception with a descriptive message
+            throw new InvalidOperationException("Error in receiving fingerprint data", ex);
+        }
+    }
+    public void Dispose()
+    {
+        objRef?.Dispose();
+    }
+    
+    
+}

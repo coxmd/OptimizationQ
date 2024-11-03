@@ -1,0 +1,69 @@
+﻿@using System.Text
+@* _Breadcrumbs.cshtml *@
+@{
+    var currentPath = Context.Request.Path.Value?.TrimStart('/').Split('/');
+    var breadcrumbs = new List<(string Text, string Url)>();
+
+    // Add Home as the first item
+    breadcrumbs.Add(("Home", "/"));
+
+    // Build the breadcrumb trail
+    if (currentPath?.Length > 0)
+    {
+        var urlBuilder = new StringBuilder("/");
+        for (int i = 0; i < currentPath.Length; i++)
+        {
+            if (!string.IsNullOrEmpty(currentPath[i]))
+            {
+                urlBuilder.Append(currentPath[i]);
+                // Convert URL segment to display text (e.g., "ConfigureServices" -> "Configure Services")
+                var displayText = System.Text.RegularExpressions.Regex.Replace(currentPath[i], "([a-z])([A-Z])", "$1 $2");
+                breadcrumbs.Add((displayText, urlBuilder.ToString()));
+                urlBuilder.Append("/");
+            }
+        }
+    }
+}
+
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb bg-white shadow-sm p-3 rounded">
+        @for (int i = 0; i < breadcrumbs.Count; i++)
+        {
+            if (i == breadcrumbs.Count - 1)
+            {
+                <li class="breadcrumb-item active" aria-current="page">@breadcrumbs[i].Text</li>
+            }
+            else
+            {
+                <li class="breadcrumb-item">
+                    <a href="@breadcrumbs[i].Url" class="text-teal-600">@breadcrumbs[i].Text</a>
+                </li>
+            }
+        }
+    </ol>
+</nav>
+
+<style>
+    .breadcrumb {
+        background-color: white;
+        border: 1px solid rgba(0, 102, 102, 0.1);
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        color: #006666;
+    }
+
+    .breadcrumb-item a {
+        color: #006666;
+        text-decoration: none;
+    }
+
+    .breadcrumb-item a:hover {
+        color: #004d4d;
+        text-decoration: underline;
+    }
+
+    .breadcrumb-item.active {
+        color: #00A3A3;
+    }
+</style>

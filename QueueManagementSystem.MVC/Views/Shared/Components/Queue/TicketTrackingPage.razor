@@ -1,0 +1,269 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@namespace QueueManagementSystem.MVC.Components
+@page "/Queue/TicketTrackingPage/{TicketNumber?}"
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ITicketService TicketService
+@inject ISmsService SmsService
+@inject ToastService ToastService
+@implements IDisposable
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+@if (string.IsNullOrEmpty(TicketNumber))
+{
+    <p>No ticket number provided.</p>
+}
+else if (ticket == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row mt-5">
+        <div class="container-card col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Ticket Information</h5>
+                    <hr />
+                    <p><strong>Ticket Number:</strong> @ticket.TicketNumber</p>
+                    <p><strong>Service:</strong> @ticket.ServiceName</p>
+                    <p><strong>Check-in Time:</strong> @ticket.PrintTime</p>
+                    <p><strong>Customers Ahead:</strong> @customersAhead</p>
+                    <p><strong>Estimated Waiting Time:</strong> @estimatedWaitingTime.TotalMinutes.ToString("F1") minutes</p>
+                </div>
+            </div>
+        </div>
+        <div class="container-card col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">Customers Waiting in Queue</h5>
+                    <hr />
+                    <div class="queue-list" style="max-height: 300px; overflow-y: auto;">
+                        <ul class="list-group">
+                            @foreach (var queuedTicket in queuedTickets)
+                            {
+                                <li class="list-group-item @(queuedTicket.TicketNumber == ticket.TicketNumber ? "active" : "")">
+                                    <strong>@queuedTicket.TicketNumber</strong> - Check-in Time: @queuedTicket.PrintTime
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* <Modal @ref="ticketInputModal" Title="Enter Ticket Number" UseStaticBackdrop="true" CloseOnEscape="false">
+    <BodyTemplate>
+        <EditForm Model="@this" OnValidSubmit="HandleTicketSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="mb-3">
+                <label for="ticketNumber" class="form-label">Ticket Number</label>
+                <InputText id="ticketNumber" class="form-control" @bind-Value="TicketNumber" placeholder="Enter your ticket number" />
+                <ValidationMessage For="@(() => TicketNumber)" />
+            </div>
+            <div class="text-right">
+                <Button Type="ButtonType.Submit" Color="ButtonColor.Primary" Disabled="@isProcessing" Class="float-end">
+                    @if (isProcessing)
+                    {
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span class="visually-hidden">Loading...</span>
+                    }
+                    else
+                    {
+                        <span>Submit</span>
+                    }
+                </Button>
+            </div>
+        </EditForm>
+    </BodyTemplate>
+</Modal> *@
+
+<style>
+    .card hr {
+        border: 0;
+        height: 2px;
+        background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(116, 182, 193, 0.75), rgba(0, 0, 0, 0));
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
+
+    .container-card {
+        margin-bottom: 20px;
+    }
+
+    .card-title {
+        text-align: center;
+        color: #2C3E50;
+        font-weight: 600;
+    }
+
+    .queue-list {
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .list-group-item {
+        padding: 0.5rem 1rem;
+    }
+
+    .queue-list .list-group-item {
+        background-color: #E6F3F8;
+        margin-bottom: 5px;
+        border-radius: 5px;
+    }
+
+        .queue-list .list-group-item.active {
+            background-color: #74B6C1;
+            color: white;
+        }
+
+        .queue-list .list-group-item:not(.active) {
+            color: #333;
+        }
+
+</style>
+
+@code {
+    [Parameter]
+    public string TicketNumber { get; set; }
+    private Ticket ticket;
+    private int customersAhead;
+    private TimeSpan estimatedWaitingTime;
+    private List<Ticket> queuedTickets = new List<Ticket>();
+    private Timer timer;
+    private List<ToastMessage> messages = new List<ToastMessage>();
+    private CustomerInfo customerInfo = new CustomerInfo();
+    private Modal ticketInputModal;
+    private bool isProcessing = false;
+    private bool initialRenderComplete = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTicketInfo();
+        timer = new Timer(async _ => await InvokeAsync(UpdateQueueInfo), null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+        TicketService.TicketQueueAlteredEvent += OnTicketQueueAltered;
+    }
+
+    private async void OnTicketQueueAltered(object sender, EventArgs args)
+    {
+        await InvokeAsync(UpdateQueueInfo);
+    }
+
+    // protected override async Task OnAfterRenderAsync(bool firstRender)
+    // {
+    //     if (firstRender)
+    //     {
+    //         initialRenderComplete = true;
+    //         await ShowTicketInputModal();
+    //         StateHasChanged();
+    //     }
+    // }
+
+
+    // private async Task ShowTicketInputModal()
+    // {
+    //     if (initialRenderComplete && ticketInputModal != null)
+    //     {
+    //         await ticketInputModal.ShowAsync();
+    //     }
+    // }
+
+
+    // private async Task CloseTicketInputModal()
+    // {
+    //     if (ticketInputModal != null)
+    //     {
+    //         await ticketInputModal.HideAsync();
+    //     }
+    // }
+
+
+    // private async Task HandleTicketSubmit()
+    // {
+    //     isProcessing = true;
+    //     await LoadTicketInfo();
+    //     if (ticket != null)
+    //     {
+    //         await CloseTicketInputModal();
+    //     }
+    //     isProcessing = false;
+
+    // }
+
+    private async Task LoadTicketInfo()
+    {
+        using var context = DbFactory.CreateDbContext();
+        ticket = await context.QueuedTickets.FirstOrDefaultAsync(t => t.TicketNumber == TicketNumber);
+        if (ticket != null)
+        {
+            await UpdateQueueInfo();
+        }
+        else
+        {
+            // Handle invalid ticket number
+            ToastService.Notify(new(ToastType.Danger, "Invalid Ticket Number"));
+        }
+    }
+
+    private async Task UpdateQueueInfo()
+    {
+        if (ticket != null)
+        {
+            using var context = DbFactory.CreateDbContext();
+            var updatedTicket = await context.QueuedTickets.FirstOrDefaultAsync(t => t.Id == ticket.Id);
+
+            if (updatedTicket == null)
+            {
+                // Ticket has been removed from the queue
+                await InvokeAsync(() =>
+                {
+                    ToastService.Notify(new ToastMessage(ToastType.Info, "Ticket Removed", "Your ticket has been removed from the queue."));
+                    ticket = null;
+                    customersAhead = 0;
+                    estimatedWaitingTime = TimeSpan.Zero;
+                    queuedTickets.Clear();
+                    StateHasChanged();
+                });
+            }
+            else
+            {
+                customersAhead = await TicketService.GetCustomersAheadCountAsync(ticket.Id);
+                estimatedWaitingTime = await TicketService.EstimateWaitingTimeAsync(ticket.Id);
+                queuedTickets = await TicketService.GetQueuedTicketsForServicePointAsync(ticket.ServicePointId);
+
+                if (customersAhead == 2)
+                {
+                    await SendNearlyReadySms();
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    private async Task SendNearlyReadySms()
+    {
+        var message = $"Hello! Your ticket {ticket.TicketNumber} for {ticket.ServiceName} is almost ready to be called. Please get ready and make your way to the service point. Thank you for your patience!";
+        await SmsService.SendSmsAsync(ticket.CustomerPhoneNumber, message);
+    }
+
+    public void Dispose()
+    {
+        timer?.Dispose();
+        TicketService.TicketQueueAlteredEvent -= async (sender, args) => await UpdateQueueInfo();
+    }
+
+    public class CustomerInfo
+    {
+        public string Name { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Email { get; set; }
+    }
+}

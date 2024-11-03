@@ -1,0 +1,302 @@
+@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.Text.Json
+
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+
+<div class="card" style="padding:20px;background-color:#E6F2F2">
+    <div class="row">
+
+        <h4>@(isEditing ? "Edit Service Point" : "Create New Service Point")</h4>
+        <EditForm Model="@newServicePoint" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <!-- Form Fields Row -->
+            <div class="row">
+                <!-- First Column -->
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label">Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="newServicePoint!.Name" />
+                        <ValidationMessage For="@(() => newServicePoint.Name)" />
+                    </div>
+                  
+
+                </div>
+               
+                <!-- second Column -->
+                <div class="col-md-4">
+                   
+                    <div class="mb-3">
+                        <label class="form-label">Service Point <span class="text-danger">*</span></label>
+                        <InputSelect class="form-select" @bind-Value="newServicePoint.ServiceId">
+                            @foreach (var service in services)
+                            {
+                                <option value="@service.Id">@service.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => newServicePoint.ServiceId)" />
+                    </div>
+                
+                </div>
+
+                <div class="col-md-4">
+                   
+                    <div class="mb-3" >
+                        <label class="form-label">Active <span class="text-danger">*</span></label>
+                        <Switch class="large-switch" @bind-Value="newServicePoint.Active" Label="Is Active?" />
+                    </div>
+
+                </div>
+            </div>
+            <!-- Action Buttons Row -->
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        @if (isEditing)
+                        {
+                            <span>Update</span>
+
+                        }
+                        else
+                        {
+                            <span>Create</span>
+                        }
+                    </Button>
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Success" hidden="@isButtonInVisible" Size="ButtonSize.Small" @onclick="CreateNew" Class="float-end me-2">New</Button>
+                </div>
+            </div>
+
+        </EditForm>
+    </div>
+</div>
+<br/><br/>
+
+
+
+
+
+
+
+
+@if (servicePoints == null)
+{
+    <h4>Service Points Loading...</h4>
+}
+
+else
+{
+   
+        <div class="card" style="padding:20px;background-color:#E6F2F2;color:#043927">
+        <Grid @ref="grid" TItem="ServicePoint"
+              Class="table table-bordered table-light table-sm compact-grid"
+              Data="servicePoints"
+              AllowPaging="true"
+              PageSize="10"
+              SelectionMode="GridSelectionMode.Single"
+              AllowSorting="true"
+              AllowRowClick="true"
+              Style="background-color:white;"
+              EmptyText="No records to display"
+              PageSizeSelectorVisible="true"
+              PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              OnRowClick="OnRowSelected"
+              Responsive="true"
+              RowClass="@(x => x == newServicePoint ? "selected-row" : "")">
+            <GridColumn TItem="ServicePoint" HeaderText="Id" SortString="Active" SortKeySelector="item => item.Id">
+                @context.Id
+            </GridColumn>
+            <GridColumn TItem="ServicePoint" HeaderText="Name" SortString="Active" SortKeySelector="item => item.Name">
+                @context.Name
+            </GridColumn>
+            <GridColumn TItem="ServicePoint" HeaderText="Service Name" SortString="Active" SortKeySelector="item => item.ServiceId">
+                @context.Service.Name
+            </GridColumn>
+            <GridColumn TItem="ServicePoint" HeaderText="Is Active" SortString="Active" SortKeySelector="item => item.Active">
+               
+                        <Switch Class="large-switch" @bind-Value="context.Active" Color="SwitchColor.Primary" />
+                  
+            </GridColumn>
+        </Grid>
+    </div>
+}
+<style>
+    .large-switch {
+        transform: scale(1.5);
+        margin-left: 15.5rem;
+    }
+
+    .switch-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        padding: 0.5rem 0;
+    }
+    .selected-row {
+        background-color: #daf1de; /* Change this to your desired color */
+    }
+    /* Reduce font size for table rows */
+    .table-sm {
+        font-size: 0.875rem; /* Adjust font size */
+    }
+
+        /* Compact row padding */
+        .table-sm td, .table-sm th {
+            padding: 0.25rem; /* Reduce cell padding */
+        }
+
+    /* Optional: Reduce card spacing or other elements */
+    .p-1 {
+        padding: 0.45rem; /* Reduce padding for compact look */
+    }
+
+    /* Adjust the grid's header and row height */
+    .grid-header, .grid-row {
+        line-height: 0.4; /* Reduce line height for compact rows */
+    }
+</style>
+@code
+{
+    private List<Service> services= new List<Service>();
+    private List<ServicePoint> servicePoints;
+    private Modal createModal;
+    private Modal editModal;
+    private ConfirmDialog deleteDialog = default!;
+    private Grid<ServicePoint> grid;
+    
+    private ServicePoint servicePoint = new ServicePoint();
+    private ServicePoint? newServicePoint = new ServicePoint();
+
+    private bool isEditing = false;
+    private bool isButtonInVisible = true;
+    private int? selectedRowId;
+
+    List<ToastMessage> messages = new List<ToastMessage>();
+
+    private async Task<GridDataProviderResult<ServicePoint>> ServicePointsDataProvider(GridDataProviderRequest<ServicePoint> request)
+    {
+        return await Task.FromResult(request.ApplyTo(servicePoints));
+    }
+
+
+
+
+    private void CreateNew()
+    {
+
+        isButtonInVisible = true;
+        isEditing = false;
+        newServicePoint = new ServicePoint();
+    }
+
+
+    private void OnRowSelected(GridRowEventArgs<ServicePoint> args)
+    {
+        newServicePoint = args.Item;
+        selectedRowId = args.Item.Id;
+        isButtonInVisible = false;
+        isEditing = true;
+
+
+    }
+
+
+    private async Task OnValidFormSubmit()
+    {
+        if (isEditing)
+        {
+            await UpdateServicePoint();
+        }
+        else
+        {
+            await CreateServicePoint();
+        }
+
+        servicePoint = new ServicePoint();
+        isEditing = false;
+        await grid.RefreshDataAsync();
+    }
+
+    private async Task CreateServicePoint()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.Add(newServicePoint);
+            context.SaveChanges();
+            servicePoints = await context.ServicePoints.Include(sp => sp.Service).OrderBy(sp => sp.Id).ToListAsync();
+            await grid.RefreshDataAsync();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = $"SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = $"Service Point created successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+
+        newServicePoint = new ServicePoint();
+    }
+
+
+    private async Task UpdateServicePoint()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            context.ServicePoints.Update(newServicePoint);
+            context.SaveChanges();
+            servicePoints = await context.ServicePoints.Include(sp => sp.Service).OrderBy(sp => sp.Id).ToListAsync();
+            await grid.RefreshDataAsync();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = $"SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = $"Service Point details edited successfully."
+                });
+
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+
+
+
+    private async Task OnShowCreateForm()
+    {
+        await createModal?.ShowAsync();
+    }
+
+    private async Task OnHideCreateForm()
+    {
+        await createModal?.HideAsync();
+        newServicePoint = new ServicePoint();
+    }
+
+    
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        services = await context.Services.OrderBy(s => s.Id).ToListAsync();
+        servicePoints = await context.ServicePoints.Include(sp => sp.Service).OrderBy(sp => sp.Id).ToListAsync();
+    }
+
+}

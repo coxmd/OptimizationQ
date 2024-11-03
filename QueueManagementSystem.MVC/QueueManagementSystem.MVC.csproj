@@ -1,0 +1,81 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>QueueManagementSystem.MVC</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Blazor.Bootstrap" Version="3.0.0" />
+    <PackageReference Include="EnyimMemcachedCore" Version="3.2.1" />
+    <PackageReference Include="FastReport.Data.Postgres" Version="2023.2.0" />
+    <PackageReference Include="FastReport.OpenSource" Version="2024.2.1" />
+    <PackageReference Include="FastReport.OpenSource.Export.PdfSimple" Version="2024.2.0" />
+    <PackageReference Include="FastReport.Web.Skia.Demo" Version="2024.2.20" />
+    <PackageReference Include="Humanizer.Core" Version="2.14.1" />
+    <PackageReference Include="ImageProcessor" Version="2.9.0" />
+    <PackageReference Include="MailKit" Version="4.8.0" />
+    <PackageReference Include="MemuraiDeveloper" Version="4.1.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="7.0.5" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="7.0.18">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="7.0.18">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="MimeKit" Version="4.8.0" />
+    <PackageReference Include="Npgsql" Version="7.0.8" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="7.0.0" />
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
+    <PackageReference Include="SkiaSharp" Version="2.88.8" />
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+    <PackageReference Include="ZXing.Net" Version="0.16.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="FastReport">
+      <HintPath>..\..\..\..\..\..\Program Files (x86)\FastReports\FastReport .NET Trial\FastReport.dll</HintPath>
+    </Reference>
+    <Reference Include="libzkfpcsharp">
+      <HintPath>wwwroot\lib\libzkfpcsharp.dll</HintPath>
+    </Reference>
+    
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Views\Admin\ReportType.cshtml">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Update="wwwroot\js\fingerprintPolling.js">
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Data\Migrations\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Migrations\" />
+    <Folder Include="wwwroot\Adverts\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="lib\x64\libzkfpcsharp.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

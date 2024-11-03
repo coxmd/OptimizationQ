@@ -1,0 +1,119 @@
+@model LoginModel
+
+@{
+    ViewData["Title"] = "Log In";
+}
+@{
+    Layout = "_LayoutNoNav";
+}
+
+<style>
+    .panel-header {
+        text-align: center;
+        font-weight: bold;
+        color: #1a3a5a;
+        margin-bottom: 20px;
+        font-size: 24px;
+    }
+
+    .login-panel {
+        background-color: lightgray;
+        border-radius: 15px;
+        padding: 20px;
+        min-height: 400px;
+        
+        
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        color: #1a3a5a;
+    }
+
+    .login-container {
+        margin-top: 40px;
+    }
+
+    .form-group label {
+        font-weight: 700;
+    }
+
+    .btn-primary {
+        background-color: #3498db;
+        border-color: #3498db;
+    }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+            border-color: #2980b9;
+        }
+
+    .form-control {
+        color: #1a3a5a;
+    }
+
+        .form-control:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 0.01rem rgba(52, 152, 219, 0.25);
+        }
+
+    .input-group-text {
+        background-color: #f8f9fa;
+        border-color: #ced4da;
+        color: #1a3a5a;
+    }
+</style>
+<div class="login-container">
+    <div class="row justify-content-center">
+        <div class="login-panel col-12 col-sm-6 col-md-4">
+            <div class="panel">
+                <div class="panel-header">
+                    <p><img src="/images/logo.png" alt="Logo" style="max-width: 100px; height: auto;justify-content:center" /></p>
+                    <h2>Login</h2>
+                    
+                </div>
+                <div class="panel-body">
+                    <form asp-action="Login" method="post" role="form" autocomplete="off">
+                        <div asp-validation-summary="All" class="text-danger"></div>
+                        <div class="mb-3">
+                        <div class="form-group">
+                                <label asp-for="UserName">UserName</label>
+                                <input asp-for="UserName" class="form-control">
+                        </div>
+                        </div>
+                        <div class="mb-3">
+                        <div class="form-group">
+                            <label asp-for="Password">Password</label>
+                                <div class="input-group">
+                                    <input type="password" asp-for="Password" class="form-control" id="passwordInput">
+                                    <span class="input-group-text" onclick="togglePassword()" style="cursor: pointer;">
+                                        <i id="toggleIcon" class="fa fa-eye"></i> <!-- Font Awesome icon -->
+                                    </span>
+                                </div>
+                        </div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="form-group">
+                        <button type="submit" class="btn btn-primary w-100">Log In</button>
+                        </div>
+                            
+                        
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    function togglePassword() {
+        var passwordInput = document.getElementById("passwordInput");
+        var toggleIcon = document.getElementById("toggleIcon");
+        if (passwordInput.type === "password") {
+            passwordInput.type = "text";
+            toggleIcon.classList.remove("fa-eye");
+            toggleIcon.classList.add("fa-eye-slash");
+        } else {
+            passwordInput.type = "password";
+            toggleIcon.classList.remove("fa-eye-slash");
+            toggleIcon.classList.add("fa-eye");
+        }
+    }
+</script>

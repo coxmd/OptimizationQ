@@ -1,0 +1,286 @@
+﻿@namespace QueueManagementSystem.MVC.Components
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Models.ViewModels
+@using QueueManagementSystem.MVC.Services
+
+@inject RoleService _roleService
+@inject PrivilegeService _privilegeService
+@inject ToastService ToastService
+
+<PageTitle>Role Privileges</PageTitle>
+
+
+
+<div class="container-fluid">
+    <div class="row g-3">
+        <!-- Left Side (Role Privileges) -->
+        <div class="col-md-6">
+            <!-- Role Dropdown -->
+            <select class="form-select mb-3" @onchange="HandleRoleChange">
+                <option value="">-- Select a Role --</option>
+                @foreach (var role in Roles)
+                {
+                    <option value="@role.Id">@role.Name</option>
+                }
+            </select>
+
+            <!-- Role Privileges Card -->
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Role Privileges</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" placeholder="Search..." @bind="SearchRolePrivileges" @bind:event="oninput" />
+                    </div>
+                    <div class="table-container flex-grow-1">
+                        <div class="table-wrapper">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="checkbox-column"><input type="checkbox" /></th>
+                                        <th class="id-column">ID</th>
+                                        <th>Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var privilege in FilteredRolePrivileges)
+                                    {
+                                        <tr>
+                                            <td class="checkbox-column"><input type="checkbox" @bind="privilege.IsSelected" /></td>
+                                            <td class="id-column">@privilege.Id</td>
+                                            <td>@privilege.Name</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="col-md-1 d-flex flex-column align-items-center justify-content-center mt-5 gap-2">
+            <button class="btn btn-success" @onclick="AddSelectedPrivilegesToRole">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="btn btn-success" @onclick="RemoveSelectedPrivilegesFromRole">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+
+        <!-- Right Side (All Privileges) -->
+        <div class="col-md-5">
+            <!-- Add Privilege Input -->
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" placeholder="Add a privilege here..." @bind="NewPrivilegeName" />
+                <button class="btn btn-success" @onclick="AddNewPrivilege">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+
+            <!-- All Privileges Card -->
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">All Privileges</h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" placeholder="Search..." @bind="SearchAllPrivileges" @bind:event="oninput" />
+                    </div>
+                    <div class="table-container flex-grow-1">
+                        <div class="table-wrapper">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th class="checkbox-column"><input type="checkbox" /></th>
+                                        <th class="id-column">ID</th>
+                                        <th>Name</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var privilege in FilteredAllPrivileges)
+                                    {
+                                        <tr>
+                                            <td class="checkbox-column"><input type="checkbox" @bind="privilege.IsSelected" /></td>
+                                            <td class="id-column">@privilege.Id</td>
+                                            <td>@privilege.Name</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .table-container {
+        position: relative;
+        height: calc(100vh - 350px); /* Adjusted height */
+        min-height: 300px;
+        overflow: hidden;
+        margin-bottom: 0; /* Remove any bottom margin */
+    }
+
+    .card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden; /* Prevent card overflow */
+        margin-bottom: 0; /* Remove any bottom margin */
+    }
+
+    .card-body {
+        flex: 1 1 auto;
+        overflow: hidden;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* Remove any extra padding/margins that might cause overflow */
+    .container-fluid {
+        padding-bottom: 0;
+    }
+
+    .row {
+        margin-bottom: 0;
+    }
+
+    /* Ensure the search input doesn't add to the height */
+    .table-wrapper {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow-y: auto;
+        overflow-x: hidden; /* Hide horizontal scrollbar if not needed */
+    }
+</style>
+
+@code {
+    // ... (Code section remains the same as in the previous version)
+}
+
+@code {
+    private List<UserRole> Roles { get; set; } = new List<UserRole>();
+    private List<PrivilegeViewModel> RolePrivileges { get; set; } = new List<PrivilegeViewModel>();
+    private List<PrivilegeViewModel> AllPrivileges { get; set; } = new List<PrivilegeViewModel>();
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    private int SelectedRoleId { get; set; }
+    private string? SearchRolePrivileges { get; set; }
+    private string? SearchAllPrivileges { get; set; }
+    private string? NewPrivilegeName { get; set; }
+
+    private IEnumerable<PrivilegeViewModel> FilteredRolePrivileges => string.IsNullOrEmpty(SearchRolePrivileges)
+        ? RolePrivileges
+        : RolePrivileges.Where(p => p.Name.Contains(SearchRolePrivileges, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<PrivilegeViewModel> FilteredAllPrivileges => string.IsNullOrEmpty(SearchAllPrivileges)
+        ? AllPrivileges
+        : AllPrivileges.Where(p => p.Name.Contains(SearchAllPrivileges, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        Roles = await _roleService.GetRolesAsync();
+        AllPrivileges = await _privilegeService.GetAllPrivilegesAsync();
+    }
+
+    private async Task HandleRoleChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int roleId))
+        {
+            SelectedRoleId = roleId;
+            await LoadRolePrivileges();
+        }
+        else
+        {
+            SelectedRoleId = 0;
+            RolePrivileges.Clear();
+            AllPrivileges = await _privilegeService.GetAllPrivilegesAsync();
+        }
+    }
+
+    private async Task LoadRolePrivileges()
+    {
+        if (SelectedRoleId > 0)
+        {
+            RolePrivileges = await _roleService.GetPrivilegesForRoleAsync(SelectedRoleId);
+
+            // Refresh all privileges and filter out assigned ones
+            var allPrivs = await _privilegeService.GetAllPrivilegesAsync();
+            var assignedPrivilegeIds = RolePrivileges.Select(p => p.Id).ToHashSet();
+            AllPrivileges = allPrivs.Where(p => !assignedPrivilegeIds.Contains(p.Id)).ToList();
+        }
+    }
+
+    private async Task AddPrivilegeToRole(int privilegeId)
+    {
+        if (SelectedRoleId > 0)
+        {
+            await _roleService.AddPrivilegeToRoleAsync(SelectedRoleId, privilegeId);
+            await LoadRolePrivileges();
+        }
+    }
+
+    private async Task AddNewPrivilege()
+    {
+        if (!string.IsNullOrEmpty(NewPrivilegeName))
+        {
+            var success = await _privilegeService.AddPrivilegeAsync(new Privilege { Name = NewPrivilegeName });
+            if (success)
+            {
+                AllPrivileges = await _privilegeService.GetAllPrivilegesAsync();
+                NewPrivilegeName = string.Empty;
+            }
+            else
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Privilege already exists"
+                    });
+            }
+        }
+    }
+
+    private async Task RemoveSelectedPrivilegesFromRole()
+    {
+        if (SelectedRoleId > 0)
+        {
+            var selectedPrivileges = FilteredRolePrivileges.Where(p => p.IsSelected).ToList();
+            foreach (var privilege in selectedPrivileges)
+            {
+                await RemovePrivilegeFromRole(privilege.Id);
+            }
+            await LoadRolePrivileges();
+        }
+    }
+
+    private async Task RemovePrivilegeFromRole(int privilegeId)
+    {
+        await _roleService.RemovePrivilegeFromRoleAsync(SelectedRoleId, privilegeId);
+    }
+
+    private async Task AddSelectedPrivilegesToRole()
+    {
+        if (SelectedRoleId > 0)
+        {
+            var selectedPrivileges = FilteredAllPrivileges.Where(p => p.IsSelected).ToList();
+            foreach (var privilege in selectedPrivileges)
+            {
+                await AddPrivilegeToRole(privilege.Id);
+            }
+            await LoadRolePrivileges();
+        }
+    }
+}

@@ -1,0 +1,10 @@
+@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Waiting Page";
+}
+@{
+    Layout = "_LayoutNoNav";
+}
+<div>
+    @(await Html.RenderComponentAsync<CalledTickets>(RenderMode.Server))
+</div>

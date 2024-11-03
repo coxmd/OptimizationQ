@@ -1,0 +1,9 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    Layout = "_Layout";
+}
+
+
+<div>
+    @(await Html.RenderComponentAsync<FingerPrint>(RenderMode.ServerPrerendered))
+</div>

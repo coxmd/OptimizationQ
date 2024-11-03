@@ -1,0 +1,100 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Home Page";
+     Layout = "_LayoutNoNav";
+}
+<div class="text-center">
+    <div>
+        <h1 class="dashboard-title">Welcome to QMS</h1>
+    </div>
+    <div class="row">
+        <h5>Scan QRCode to track ticket or Select a service to print ticket</h5>
+        <!-- Card 1: Configure Services -->
+        <div class="col-md-6">
+            <div class="dashboard-card text-center">
+                @* <h5 class="card-title"> </h5> *@
+                <div class="card-body">
+                    @(await Html.RenderComponentAsync<QRCode>(RenderMode.ServerPrerendered))
+                </div>
+            </div>
+        </div>
+        <!-- Card 2: Configure Service Providers -->
+        <div class="col-md-6">
+            <a href="@Url.Action("CheckinPage", "Queue")" class="text-decoration-none">
+                <div class="dashboard-card dashboard-card-centered text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Click to Select a Service</h5>
+                        <i class="fas fa-hand-point-right fa-2x mb-3"></i>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+<style>
+.dashboard-card {
+    background-color: #FFFFFF;
+    color: #006666;
+    border-radius: 9.6px; /* Reduced by 20% from 12px */
+    padding: 8px; /* Reduced by 20% from 10px */
+    min-height: 330px; /* Reduced by 20% from 400px */
+    margin-top: 8px; /* Reduced by 20% from 10px */
+    box-shadow: 0 6.4px 12.8px rgba(0, 0, 0, 0.4); /* Reduced by 20% from 0 8px 16px */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-card-centered {
+    justify-content: center;
+    align-items: center;
+}
+
+.dashboard-card-centered .card-body {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+.dashboard-title {
+    color: #006666;
+    font-weight: bold;
+    font-size: 2rem; /* Reduced by 20% from 2.5rem */
+    padding: 16px 0; /* Reduced by 20% from 20px 0 */
+    margin-bottom: 16px; /* Reduced by 20% from 20px */
+    border-bottom: 1px solid rgba(0, 102, 102, 0.2);
+}
+
+.dashboard-card:hover {
+    box-shadow: 0 6.4px 12.8px rgba(0, 0, 0, 0.2); /* Reduced by 20% from 0 8px 16px */
+    transform: scale(1.032); /* Reduced by 20% from 1.04 */
+}
+
+.dashboard-card i {
+    color: #00A3A3;
+    font-size: 2.4rem; /* Reduced by 20% from 3rem */
+    margin-bottom: 12px; /* Reduced by 20% from 15px */
+}
+
+.dashboard-card h5 {
+    font-weight: 700;
+    margin-top: 4px; /* Reduced by 20% from 5px */
+}
+
+.hover-zoom {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hover-zoom:hover {
+    transform: scale(1.4); /* Reduced by 20% from 1.5 */
+    box-shadow: 0 6.4px 12.8px rgba(0, 0, 0, 0.5); /* Reduced by 20% from 0 8px 16px */
+}
+
+/* Responsive adjustments */
+@@media (max-width: 768px) {
+    .dashboard-card {
+        margin-bottom: 12px; /* Reduced by 20% from 15px */
+    }
+</style>

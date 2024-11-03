@@ -1,0 +1,272 @@
+﻿@namespace QueueManagementSystem.MVC.Components
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Models.Feedback
+@using QueueManagementSystem.MVC.Models.Users
+@using QueueManagementSystem.MVC.Models.enums
+@using QueueManagementSystem.MVC.Services
+@inject ToastService ToastService
+@inject RoleService _roleService
+@inject SystemUsersService _systemUsersService
+@inject ToastService ToastService
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="card" style="padding:20px;background-color:#E6F2F2;">
+
+    <div class="row">
+        <h4>@(isEditing ? "Edit Sytem User" : "New System User")</h4>
+        <EditForm Model="@systemUser" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-4">
+
+                  
+                    <div class="mb-3">
+                        <label class="form-label">Surname</label>
+                        <InputText class="form-control" @bind-Value="systemUser.Surname"></InputText>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Other Names</label>
+                        <InputText class="form-control" @bind-Value="systemUser.OtherNames"></InputText>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                      <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <InputText class="form-control" @bind-Value="systemUser.Username"></InputText>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText  type="password" class="form-control" @bind-Value="systemUser.Password"></InputText>
+                    </div>
+                   
+                  
+
+
+                </div>
+                <div class="col-md-4">
+
+                    <div class="mb-3">
+                        <label class="form-label">Roles <span class="text-danger">*</span></label>
+                        <InputSelect class="form-control" @bind-Value="systemUser.Role">
+                            <option value="">--Select Role--</option>
+                            @foreach (var role in roles)
+                            {
+                                <option value="@role.Id">@role.Name</option>
+                            }
+                        </InputSelect>
+                        <ValidationMessage For="@(() => systemUser.Role)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Confirm Password</label>
+                        <InputText type="password" class="form-control" @bind-Value="systemUser.Password" id="confirm"></InputText>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end me-2">
+                        @if (isEditing)
+                        {
+                            <span>Update</span>
+                        }
+                        else
+                        {
+                            <span>Create</span>
+                        }
+                    </Button>
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Success" hidden="@isButtonInVisible" Size="ButtonSize.Small" @onclick="CreateNew" Class="float-end me-2">New</Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+
+
+</div>
+@if (smsSettingsList == null)
+{
+    <h4>Roles Loading...</h4>
+}
+else
+{
+
+    <div class="card" style="padding:20px;background-color:#E6F2F2;color:black">
+        <Grid @ref="grid" TItem="SystemUsersModel" Class="table table-bordered table-light table-sm compact-grid" Data="smsSettingsList" AllowPaging="true"
+              PageSize="10"
+              SelectionMode="GridSelectionMode.Single"
+              AllowSorting="true"
+              AllowRowClick="true"
+              Style="background-color:white;"
+              EmptyText="No records to display"
+              PageSizeSelectorVisible="true"
+              PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              OnRowClick="OnRowSelected"
+              Responsive="true"
+              RowClass="@(x => x == systemUser ? "selected-row" : "")">
+            <GridColumn TItem="SystemUsersModel" HeaderText="Id" SortString="Id" SortKeySelector="item => item.Id">
+                @context.Id
+            </GridColumn>
+            <GridColumn TItem="SystemUsersModel" HeaderText="Surname" SortString="Surname" SortKeySelector="item => item.Surname">
+                @context.Surname
+            </GridColumn>
+            <GridColumn TItem="SystemUsersModel" HeaderText="OtherNames" SortString="OtherNames" SortKeySelector="item => item.OtherNames">
+                @context.OtherNames
+            </GridColumn>
+            <GridColumn TItem="SystemUsersModel" HeaderText="Username" SortString="Username" SortKeySelector="item => item.Username">
+                @context.Username
+            </GridColumn>
+            <GridColumn TItem="SystemUsersModel" HeaderText="Password" SortString="Password" SortKeySelector="item => item.Password">
+                @("*".PadLeft(context.Password.Length, '*'))
+            </GridColumn>
+            @* <GridColumn TItem="SystemUsersModel" HeaderText="Role" SortString="Role" SortKeySelector="item => item.Role.ToString()">
+                @context.Role.ToString()
+            </GridColumn> *@
+        </Grid>
+    </div>
+}
+
+<style>
+    .large-switch {
+        transform: scale(1.5);
+        margin-left: 15.5rem;
+    }
+
+    .selected-row {
+        background-color: #daf1de;
+    }
+
+    .table-sm {
+        font-size: 0.875rem;
+    }
+
+        .table-sm td, .table-sm th {
+            padding: 0.25rem;
+        }
+
+    .p-1 {
+        padding: 0.25rem;
+    }
+
+    .grid-header, .grid-row {
+        line-height: 0.4;
+    }
+</style>
+@code {
+
+    private List<ToastMessage> messages = new List<ToastMessage>();
+    private SystemUsersModel systemUser = new SystemUsersModel();
+    private List<SystemUsersModel> smsSettingsList = new List<SystemUsersModel>();
+    private List<UserRole> roles { get; set; } = new List<UserRole>();
+    private Grid<SystemUsersModel>? grid;
+    private int? selectedRowId;
+    private bool isButtonInVisible = true;
+    private bool isEditing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        roles = await _roleService.GetRolesAsync();
+        await loadUsers();
+
+
+    }
+
+    private void CreateNew()
+    {
+        isButtonInVisible = true;
+        isEditing = false;
+        systemUser = new SystemUsersModel();
+    }
+    private async Task OnValidFormSubmit()
+    {
+        if (isEditing)
+        {
+            await UpdateServiceProvider();
+        }
+        else
+        {
+            await CreateServiceProvider();
+        }
+
+        systemUser = new SystemUsersModel();
+        isEditing = false;
+        await loadUsers();
+
+    }
+    private async Task CreateServiceProvider()
+    {
+        try
+        {
+            systemUser.Password = BCrypt.Net.BCrypt.HashPassword(systemUser.Password);
+            var existingUsername = await _systemUsersService.FetUserName(systemUser.Surname!);
+            if (existingUsername != null)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Username already registered"
+                    });
+            }
+            
+            var success = await _systemUsersService.AddUser(systemUser);
+            if (success)
+            {
+                systemUser = new SystemUsersModel();
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "SUCCESS",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Registration successful"
+                    });
+            }
+            
+
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error saving comments: {ex.Message}"));
+        }
+    }
+    private async Task loadUsers()
+    {
+        smsSettingsList = await _systemUsersService.FetUsers();
+    }
+    private async Task UpdateServiceProvider()
+    {
+        try
+        {
+
+            systemUser.Password = BCrypt.Net.BCrypt.HashPassword(systemUser.Password);
+            var success = await _systemUsersService.EditUser(systemUser);
+            if (success)
+            {
+                systemUser = new SystemUsersModel();
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "SUCCESS",
+                        HelpText = $"{DateTime.Now}",
+                        Message = "Sytem User Successful"
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}."));
+        }
+    }
+
+    private void OnRowSelected(GridRowEventArgs<SystemUsersModel> args)
+    {
+        systemUser = args.Item;
+        selectedRowId = args.Item.Id;
+        isEditing = true;
+        
+    }
+    
+}

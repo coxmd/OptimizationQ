@@ -1,0 +1,1510 @@
+@using Microsoft.AspNetCore.Components
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.Security.Claims
+@using QueueManagementSystem.MVC.Components
+@using FastReport
+@using FastReport.Export.PdfSimple;
+@using FastReport.Export.Pdf;
+@using QueueManagementSystem.MVC.Services
+
+@namespace QueueManagementSystem.MVC.Components
+@inject NavigationManager NavigationManager
+@inject ServicePointService ServicePointService
+@inject ITicketService TicketService
+@inject IDbContextManager DbContextManager
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
+@inject ToastService ToastService
+@inject ISmsService smsService
+@inject IReportService ReportService
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<div class="row mb-3">
+    @if (!isPoolingEnabled)
+    {
+        <Modal @ref="servicePointModal" title="@(IsSignedIn ? "Update Service Point Status" : "Select Service Point")" IsVerticallyCentered="true">
+            <BodyTemplate>
+                @if (!IsSignedIn)
+                {
+                    <div class="mb-3">
+                        <label class="form-label">Select Service Point:</label>
+                        <select class="form-select" @bind="selectedServicePointId">
+                            <option value="">Select a service point...</option>
+                            @foreach (var servicePoint in availableServicePoints)
+                            {
+                                <option value="@servicePoint.Id">@servicePoint.Name</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="mb-3">
+                    <label class="form-label">Status:</label>
+                    <select class="form-select" @bind="selectedStatus">
+                        <option value="Available">Available</option>
+                        <option value="Stepped out">Stepped out</option>
+                    </select>
+                </div>
+                <div class="row">
+                    <div class="col-md-12 text-right">
+                        @if (IsSignedIn)
+                        {
+                            <Button Type="ButtonType.Button" Color="ButtonColor.Danger" Class="float-start"
+                                    @onclick="SignOutServicePoint">
+                                Sign Out
+                            </Button>
+                        }
+                        <Button Type="ButtonType.Button" Color="ButtonColor.Secondary"
+                                Class="float-end" @onclick="CloseServicePointModal">
+                            Cancel
+                        </Button>
+                        <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                                Class="float-end me-2" @onclick="@(IsSignedIn ? UpdateServicePointStatus : SignInServicePoint)">
+                            @(IsSignedIn ? "Update" : "Sign In")
+                        </Button>
+                    </div>
+                </div>
+            </BodyTemplate>
+        </Modal>
+
+        <div class="row mb-3">
+            <div class="col-12">
+                @if (IsSignedIn)
+                {
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0">Current Service Point: @currentServicePointName</h5>
+                                    <small class="text-muted">Status: @currentStatus</small>
+                                </div>
+                                <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                                        @onclick="ShowServicePointModal">
+                                    Update Status
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+    @if (isPoolingEnabled)
+    {
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            @if (!string.IsNullOrEmpty(selectedService))
+                            {
+                                <h5 class="mb-0">Current Service: @selectedService</h5>
+                                <small class="text-muted">Pooled Service Mode</small>
+                            }
+                            else
+                            {
+                                <h5 class="mb-0">No Service Selected</h5>
+                            }
+                        </div>
+                        <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                                @onclick="ShowServiceSelectionModal">
+                            @(string.IsNullOrEmpty(selectedService) ? "Select Service" : "Change Service")
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        @* <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> Pooled Service Mode - All service providers share the same queue
+            </div>
+        </div> *@
+    }
+</div>
+
+<Modal @ref="confirmationModal2" title="Change Room" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>You are about to change your room status to @pendingStatus. Are you sure you want to continue?</p>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" Class="float-end" @onclick="CancelStatusChange">Cancel</Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary" Class="float-end me-2" @onclick="UpdateServicePointStatus">Confirm</Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<Modal @ref="serviceSelectionModal" title="Select Service" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <div class="mb-3">
+            <label class="form-label">Select the service you will be offering:</label>
+            <select class="form-select" @bind="pendingSelectedService">
+                <option value="">Select a service...</option>
+                @foreach (var service in services)
+                {
+                    <option value="@service.Name">@service.Name</option>
+                }
+            </select>
+        </div>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary"
+                        Class="float-end" @onclick="CloseServiceSelectionModal">
+                    Cancel
+                </Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                        Class="float-end me-2" @onclick="ConfirmServiceSelection">
+                    Confirm
+                </Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<hr>
+@* <h5 class="display-6 text-center">Tickets in Queue</h5> *@
+@if (queuedTickets == null || !queuedTickets.Any())
+{
+    <h4>No tickets in queue for this service point</h4>
+}
+else
+{
+    <div class="card" style="padding:20px;background-color:#E6F2F2;color:#043927">
+    <Grid @ref="grid" TItem="Ticket" Class="table table-bordered table-light table-sm compact-grid"
+    Data="queuedTickets.OrderByDescending(t => t.IsEmergency).ThenBy(t => t.PrintTime)"
+    AllowPaging="true" 
+    PageSize="10" 
+    AllowSorting="true" 
+    EmptyText="No records to display" 
+    PageSizeSelectorVisible="true"
+              SelectionMode="GridSelectionMode.Single"
+              
+              AllowRowClick="true"
+    Responsive="true"
+    PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              RowClass="@(x => GetRowClass(x))">
+            <GridColumn TItem="Ticket" HeaderText="Ticket Number" SortString="Ticket Number" SortKeySelector="item => item.TicketNumber">
+                @context.TicketNumber
+                @if (context.WasNoShow)
+                {
+                    <span class="badge bg-warning ms-2" title="Previous No Show - @context.LastNoShowTime?.ToString("HH:mm")">
+                        <i class="fas fa-clock"></i> No Show
+                    </span>
+                }
+                @if (isPoolingEnabled && context.IsLocked && context.LockedByServiceProviderId != currentServiceProviderId)
+                {
+                    <span class="badge bg-secondary ms-2" title="Being handled by another service provider">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                }
+            </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Service Name" SortString="Service Name" SortKeySelector="item => item.ServiceName">
+            @context.ServiceName
+        </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Print Time" SortString="Print Time" SortKeySelector="item => item.PrintTime">
+            @context.PrintTime
+        </GridColumn>
+        <GridColumn TItem="Ticket" HeaderText="Status" SortString="Status" SortKeySelector="item => item.Status" >
+            @context.Status
+        </GridColumn>
+        <GridColumn TItem="Ticket" HeaderText="Actions">
+                @if (CanHandleTicket(context))
+                {
+                    @if (context.Status == "Called")
+                    {
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Success"
+                                @onclick="() => MarkAsShowedUp(context)">
+                            Showed Up
+                        </Button>
+                    }
+                    @if (context.Status == "In-Service")
+                    {
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Success"
+                                @onclick="() => ShowFinishModal(context)">
+                            Finish
+                        </Button>
+                    }
+                    @if (context.Status != "In-Service")
+                    {
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Primary"
+                                @onclick="() => CallPatient(context)">
+                            Call
+                        </Button>
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Warning"
+                                @onclick="() => MarkAsNoShow(context)">
+                            No Show
+                        </Button>
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Info"
+                                @onclick="() => ShowReQueueModal(context)">
+                            Re-queue
+                        </Button>
+                        <Button Size="ButtonSize.Small" Color="ButtonColor.Danger"
+                                @onclick="() => RemoveFromQueue(context)">
+                            Remove
+                        </Button>
+                    }
+                }
+        </GridColumn>
+    </Grid>
+    </div>
+}
+
+<Modal @ref="confirmationModal" title="Message" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>@confirmationMessage</p>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" Class="float-end" @onclick="CloseModal">Cancel</Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary" Class="float-end me-2" @onclick="ConfirmAction">Confirm</Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<Modal @ref="reQueueModal" title="Transfer Ticket" IsVerticallyCentered="true" UseStaticBackdrop="true" CloseOnEscape="false">
+    <BodyTemplate>
+        <p>Re-queue Ticket Number @selectedTicket?.TicketNumber to another service:</p>
+        <div class="mb-3">
+            <label class="form-label">Select a service:</label>
+            <InputSelect class="form-select" @bind-Value="selectedService">
+                <option value="">Select a service</option>
+                @foreach (var service in services)
+                {
+                    <option value="@service.Name">@service.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" Class="float-end" @onclick="CloseModal">Cancel</Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary" Class="float-end me-2" @onclick="ReQueuePatient">Re-Queue</Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<Modal @ref="finishModal" title="Finish Service" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>Finish service for Ticket Number @selectedTicket?.TicketNumber</p>
+        <div class="mb-3">
+            <label class="form-label">Transfer to another service:</label>
+            <InputSelect class="form-select" @bind-Value="selectedTransferService">
+                <option value="">Don't Transfer</option>
+                @if (services != null)
+                {
+                    @foreach (var service in services.Where(s => s.Name != serviceName))
+                    {
+                        <option value="@service.Name">@service.Name</option>
+                    }
+                }
+            </InputSelect>
+        </div>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary"
+                        Class="float-end" @onclick="CloseModal">
+                    Cancel
+                </Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                        Class="float-end me-2" @onclick="FinishAndTransfer">
+                    Complete Service
+                </Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<style>
+    .emergency-row {
+        color: #dc3545 !important; /* Bootstrap danger color */
+        font-weight: bold;
+    }
+
+    .selected-row {
+        background-color: #daf1de; /* Change this to your desired color */
+    }
+    /* Reduce font size for table rows */
+    .table-sm {
+        font-size: 0.875rem; /* Adjust font size */
+    }
+
+        /* Compact row padding */
+        .table-sm td, .table-sm th {
+            padding: 0.25rem; /* Reduce cell padding */
+        }
+
+    /* Optional: Reduce card spacing or other elements */
+    .p-1 {
+        padding: 0.25rem; /* Reduce padding for compact look */
+    }
+
+    /* Adjust the grid's header and row height */
+    .grid-header, .grid-row {
+        line-height: 0.4; /* Reduce line height for compact rows */
+    }
+
+    .in-service-row {
+        background-color: #fff3cd;
+        font-style: italic;
+    }
+
+    .my-service-row {
+        background-color: #d1e7dd;
+        font-weight: bold;
+    }
+
+    .called-row {
+        background-color: #cfe2ff;
+    }
+
+    .locked-row {
+        opacity: 0.7;
+        cursor: not-allowed;
+    }
+
+    .locked-by-me {
+        background-color: #d1e7dd;
+    }
+</style>
+
+@code {
+    private List<Ticket> queuedTickets;
+    private List<Service> services;
+    private string serviceName;
+    private int servicePointId;
+    private Grid<Ticket> grid;
+    private Modal confirmationModal;
+    private Modal confirmationModal2;
+    private Modal reQueueModal;
+    private string confirmationMessage;
+    private Func<Task> confirmedAction;
+    private Ticket selectedTicket = new Ticket();
+    private Modal finishModal;
+    private string selectedTransferService = "";
+    private DateTime showUpTime;
+    private List<ToastMessage> messages = new List<ToastMessage>();
+    private string currentStatus = "Available";
+    private string pendingStatus = "Available";
+    private bool isPoolingEnabled;
+    private string currentServiceProviderId;
+    private bool IsSignedIn;
+    private ServiceProviderAssignment currentAssignment;
+
+    private Modal servicePointModal;
+
+    private string selectedStatus = "Available";
+    private int selectedServicePointId;
+    private List<ServicePoint> availableServicePoints = new List<ServicePoint>();
+    private string DialogTitle => IsSignedIn ? "Update Service Point Status" : "Sign In to Service Point";
+    private string currentServicePointName;
+    private int currentServicePointId;
+    private DateTime? signInTime;
+    private DateTime? signOutTime;
+    private Modal serviceSelectionModal;
+    private string pendingSelectedService = "";
+    private string selectedService = "";
+
+
+    private async void OnTicketQueueAltered(object sender, EventArgs e)
+    {
+        await InvokeAsync(async() =>
+        {
+            queuedTickets = await TicketService.GetTicketsByServicePointIdAsync(servicePointId);
+            await RefreshQueuedTickets();
+            StateHasChanged();
+        });
+    }
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authState?.User != null)
+        {
+            currentServiceProviderId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        }
+
+        // Initialize services list
+        services = new List<Service>();
+
+        await LoadServiceProviderData();
+        await LoadServices();
+        TicketService.TicketQueueAlteredEvent += OnTicketQueueAltered;
+
+        isPoolingEnabled = await TicketService.IsPoolingEnabledAsync();
+
+        if (isPoolingEnabled)
+        {
+            // Show service selection modal after a short delay
+            await Task.Delay(100);
+            await ShowServiceSelectionModal();
+        }
+        else if (!isPoolingEnabled && IsSignedIn && servicePointId > 0)
+        {
+            currentStatus = await ServicePointService.GetServicePointStatusAsync(servicePointId);
+            pendingStatus = currentStatus;
+
+            // Explicitly load tickets after sign-in
+            await RefreshQueuedTickets();
+        }
+    }
+
+    // Add new methods for service selection
+    private async Task ShowServiceSelectionModal()
+    {
+        pendingSelectedService = selectedService;
+        await serviceSelectionModal.ShowAsync();
+    }
+
+    private async Task CloseServiceSelectionModal()
+    {
+        await serviceSelectionModal.HideAsync();
+    }
+
+    private async Task ConfirmServiceSelection()
+    {
+        if (string.IsNullOrEmpty(pendingSelectedService))
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Warning,
+                    Title = "Selection Required",
+                    Message = "Please select a service to continue."
+                });
+            return;
+        }
+
+        selectedService = pendingSelectedService;
+        await serviceSelectionModal.HideAsync();
+        await RefreshQueuedTickets();
+
+        ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Success,
+                Title = "Service Selected",
+                Message = $"Now showing tickets for {selectedService}"
+            });
+    }
+
+    private async Task LoadServices()
+    {
+        try
+        {
+            await DbContextManager.ExecuteInContextAsync(async context =>
+            {
+                services = await context.Services.ToListAsync();
+            });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = "Failed to load services."
+                });
+            Console.WriteLine($"LoadServices error: {ex}");
+        }
+    }
+
+    private async Task LoadServicePoints()
+    {
+        try
+        {
+            await DbContextManager.ExecuteInContextAsync(async context =>
+            {
+                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                var serviceProviderId = authState?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(serviceProviderId))
+                {
+                    availableServicePoints = await context.ServicePoints
+                            .ToListAsync();
+
+                    // var serviceProvider = await context.ServiceProviders
+                    //     .Include(sp => sp.Service)
+                    //     .SingleOrDefaultAsync(sp => sp.Id.ToString() == serviceProviderId);
+
+                    // if (serviceProvider != null)
+                    // {
+                    //     availableServicePoints = await context.ServicePoints
+                    //         .Where(sp => sp.ServiceId == serviceProvider.ServiceId)
+                    //         .ToListAsync();
+                    // }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = "Failed to load service points."
+                });
+            Console.WriteLine($"LoadServicePoints error: {ex}");
+        }
+    }
+
+    private async Task CheckServicePointAssignment()
+    {
+        try
+        {
+            await DbContextManager.ExecuteInContextAsync(async context =>
+            {
+                var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+                var serviceProviderId = authState?.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(serviceProviderId))
+                {
+                    currentAssignment = await context.ServiceProviderAssignments
+                        .Include(spa => spa.ServicePoint)
+                        .Where(spa => spa.ServiceProviderId.ToString() == serviceProviderId
+                               && spa.IsActive
+                               && spa.SignOutTime == null)
+                        .FirstOrDefaultAsync();
+
+                    await LoadServicePoints();
+
+                    IsSignedIn = currentAssignment != null;
+
+                    if (IsSignedIn && currentAssignment != null)
+                    {
+                        servicePointId = currentAssignment.ServicePointId;
+                        selectedStatus = currentAssignment.Status;
+                        await RefreshServicePointData();
+                    }
+                    else
+                    {
+                        // If not signed in, show the dialog after a short delay
+                        await Task.Delay(100); // Small delay to ensure UI is ready
+                        await ShowServicePointModal();
+                    }
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = "Failed to check service point assignment."
+                });
+            Console.WriteLine($"CheckServicePointAssignment error: {ex}");
+        }
+    }
+
+    private async Task ShowServicePointModal()
+    {
+        // Ensure available service points are loaded
+        await LoadServicePoints();
+
+        // Reset selection state
+        selectedStatus = "Available";
+        selectedServicePointId = 0;
+
+        await servicePointModal.ShowAsync();
+    }
+
+    private async Task SignInServicePoint()
+    {
+        if (selectedServicePointId == 0)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Warning,
+                    Title = "Selection Required",
+                    Message = "Please select a service point."
+                });
+            return;
+        }
+
+        await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            var serviceProviderId = int.Parse(
+                (await AuthenticationStateProvider.GetAuthenticationStateAsync())
+                .User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            );
+
+            var newAssignment = new ServiceProviderAssignment
+                {
+                    ServiceProviderId = serviceProviderId,
+                    ServicePointId = selectedServicePointId,
+                    AssignmentTime = DateTime.Now,
+                    Status = "Available",
+                    SignInTime = DateTime.Now,
+                    IsActive = true
+                };
+
+            context.ServiceProviderAssignments.Add(newAssignment);
+            await context.SaveChangesAsync();
+
+            var servicePoint = await context.ServicePoints.FindAsync(selectedServicePointId);
+            currentServicePointId = selectedServicePointId;
+            currentServicePointName = servicePoint.Name;
+            currentStatus = selectedStatus;
+            signInTime = DateTime.UtcNow;
+            IsSignedIn = true;
+        });
+
+        await ServicePointService.UpdateServicePointStatusAsync(selectedServicePointId, selectedStatus);
+        await servicePointModal.HideAsync();
+
+        // Explicitly refresh tickets after sign-in
+        await RefreshQueuedTickets();
+
+        ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Success,
+                Title = "Signed In",
+                Message = $"Successfully signed in to {currentServicePointName}"
+            });
+
+        // Force component to re - render
+        StateHasChanged();
+    }
+
+    private async Task SignOutServicePoint()
+    {
+        await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            var serviceProviderId = int.Parse(
+                (await AuthenticationStateProvider.GetAuthenticationStateAsync())
+                .User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            );
+
+            var activeAssignment = await context.ServiceProviderAssignments
+                .Where(spa => spa.ServiceProviderId == serviceProviderId && spa.IsActive)
+                .FirstOrDefaultAsync();
+
+            if (activeAssignment != null)
+            {
+                activeAssignment.IsActive = false;
+                // activeAssignment.Status = "Stepped out";
+                signOutTime = DateTime.Now;
+                await context.SaveChangesAsync();
+            }
+        });
+
+        // Reset all relevant state
+        IsSignedIn = false;
+        currentServicePointId = 0;
+        currentServicePointName = null;
+        signInTime = null;
+        queuedTickets = new List<Ticket>();
+        selectedServicePointId = 0;
+        selectedStatus = "Available";
+
+        ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Info,
+                Title = "Signed Out",
+                Message = "Successfully signed out from service point"
+            });
+
+        // Force a state update
+        await InvokeAsync(StateHasChanged);
+
+        // Add a small delay to ensure the UI is updated
+        await Task.Delay(100);
+
+        // Show the service point modal for sign-in
+        await ShowServicePointModal();
+
+        // Load available service points again
+        await LoadServicePoints();
+    }
+
+    private async Task UpdateServicePointStatus()
+    {
+        await ServicePointService.UpdateServicePointStatusAsync(currentServicePointId, selectedStatus);
+        currentStatus = selectedStatus;
+
+        ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Success,
+                Title = "Status Updated",
+                Message = $"Service point status updated to {currentStatus}"
+            });
+
+        await servicePointModal.HideAsync();
+    }
+
+    private async Task CloseServicePointModal()
+    {
+        await servicePointModal.HideAsync();
+    }
+
+
+
+    // Retrieves get row class including in-service status
+    private string GetRowClass(Ticket ticket)
+    {
+        var classes = new List<string>();
+
+        if (ticket == selectedTicket)
+        {
+            classes.Add("selected-row");
+        }
+
+        if (ticket.IsEmergency == true)
+        {
+            classes.Add("emergency-row");
+        }
+
+        if (ticket.Status == "In-Service")
+        {
+            classes.Add("in-service-row");
+        }
+
+        if (ticket.Status == "Called")
+        {
+            classes.Add("called-row");
+        }
+
+        if (ticket.WasNoShow)
+        {
+            classes.Add("no-show-history-row");
+        }
+
+        if (isPoolingEnabled && ticket.IsLocked)
+        {
+            if (ticket.LockedByServiceProviderId == currentServiceProviderId)
+            {
+                classes.Add("locked-by-me");
+            }
+            else
+            {
+                classes.Add("locked-row");
+            }
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    // Add a button in the UI for manual sign-in when needed
+    private RenderFragment SignInButton => builder =>
+    {
+        if (!IsSignedIn)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "text-center mt-4");
+            builder.OpenElement(2, "button");
+            builder.AddAttribute(3, "class", "btn btn-primary");
+            builder.AddAttribute(4, "onclick", EventCallback.Factory.Create(this, ShowServicePointModal));
+            builder.AddContent(5, "Sign In to Service Point");
+            builder.CloseElement();
+            builder.CloseElement();
+        }
+    };
+
+    // Method to check if current provider can take action on a ticket
+    private bool CanHandleTicket(Ticket ticket)
+    {
+        if (!isPoolingEnabled) return true;
+
+        // If the ticket is locked, we can only handle it if we locked it
+        if (ticket.IsLocked)
+        {
+            return ticket.LockedByServiceProviderId == currentServiceProviderId;
+        }
+
+        // If the ticket isn't locked, anyone can handle it
+        return true;
+    }
+
+    private async Task<string> GenerateTicketPdfBase64(Ticket ticket)
+    {
+        Report report = ReportService.GenerateTicketReport(ticket);
+        using (MemoryStream strm = new MemoryStream())
+        {
+            PDFExport pdfExport = new PDFExport();
+            pdfExport.Export(report, strm);
+            return Convert.ToBase64String(strm.ToArray());
+        }
+    }
+
+    private async Task ReprintTicket(Ticket ticket)
+    {
+        try
+        {
+            // Generate the ticket PDF
+            var base64Pdf = await GenerateTicketPdfBase64(ticket);
+
+            // Use JavaScript interop to print the ticket
+            await JS.InvokeVoidAsync("printTicket", base64Pdf);
+
+            // Optionally, you can show a success message
+            await JS.InvokeVoidAsync("alert", "Ticket re-printed successfully.");
+        }
+        catch (Exception ex)
+        {
+            // Handle any errors that occur during re-printing
+            await JS.InvokeVoidAsync("alert", $"An error occurred while re-printing the ticket: {ex.Message}");
+        }
+    }
+
+    private async Task ConfirmStatusChange(ChangeEventArgs e)
+    {
+        pendingStatus = e.Value.ToString();
+        if (pendingStatus != currentStatus)
+        {
+            await confirmationModal2.ShowAsync();
+        }
+    }
+
+    private async Task CancelStatusChange()
+    {
+        currentStatus = pendingStatus;
+        await confirmationModal2.HideAsync();
+    }
+
+    private async Task LoadServiceProviderData()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var serviceProviderId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            var serviceProvider = await context.ServiceProviders
+                .Include(sp => sp.Service)
+                .SingleOrDefaultAsync(sp => sp.Id.ToString() == serviceProviderId);
+
+            // Get active assignment if exists
+            var activeAssignment = await context.ServiceProviderAssignments
+                .Include(spa => spa.ServicePoint)
+                .Where(spa => spa.ServiceProviderId == serviceProvider.Id && spa.IsActive)
+                .FirstOrDefaultAsync();
+
+            // Load available service points
+            availableServicePoints = await context.ServicePoints
+                .Where(sp => sp.ServiceId == serviceProvider.ServiceId)
+                .ToListAsync();
+
+            if (activeAssignment != null)
+            {
+                IsSignedIn = true;
+                currentServicePointId = activeAssignment.ServicePointId;
+                currentServicePointName = activeAssignment.ServicePoint.Name;
+                currentStatus = await ServicePointService.GetServicePointStatusAsync(currentServicePointId);
+                signInTime = activeAssignment.AssignmentTime;
+
+                // Load tickets for the current service point
+                await RefreshQueuedTickets();
+            }
+            else
+            {
+                IsSignedIn = false;
+                await ShowServicePointModal();
+            }
+        });
+    }
+
+
+    private async Task RefreshQueuedTickets()
+    {
+        if (isPoolingEnabled)
+        {
+            if (!string.IsNullOrEmpty(selectedService))
+            {
+                queuedTickets = await TicketService.GetTicketsByServiceNameAsync(selectedService);
+            }
+            else
+            {
+                queuedTickets = new List<Ticket>();
+            }
+        }
+        else if (IsSignedIn && currentServicePointId > 0)
+        {
+            queuedTickets = await TicketService.GetTicketsByServicePointIdAsync(currentServicePointId);
+            // Ensure the component re-renders
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RefreshServicePointData()
+    {
+        try
+        {
+            if (IsSignedIn && currentAssignment != null && servicePointId > 0)
+            {
+                queuedTickets = await TicketService.GetTicketsByServicePointIdAsync(servicePointId);
+                currentStatus = await ServicePointService.GetServicePointStatusAsync(servicePointId);
+                StateHasChanged();
+            }
+            else
+            {
+                queuedTickets = new List<Ticket>();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Danger,
+                Title = "Error",
+                Message = "Failed to refresh service point data."
+            });
+            Console.WriteLine($"RefreshServicePointData error: {ex}");
+        }
+    }
+
+    private async Task HandleRoomSwitch(int newServicePointId)
+    {
+        servicePointId = newServicePointId;
+        await RefreshServicePointData();
+    }
+
+    private async Task CallPatient(Ticket ticket)
+    {
+        try
+        {
+            if (isPoolingEnabled)
+            {
+                // Check if we're already handling this ticket
+                if (ticket.IsLocked && ticket.LockedByServiceProviderId == currentServiceProviderId)
+                {
+                    // We already have the lock, proceed with recalling without checking for active tickets
+                    await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName, servicePointId, currentServiceProviderId);
+                    await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+
+                    ToastService.Notify(new ToastMessage
+                        {
+                            Type = ToastType.Info,
+                            Title = "Patient Recalled",
+                            Message = $"Patient with Ticket Number {ticket.TicketNumber} has been recalled to {ticket.ServiceName}."
+                        });
+                }
+                else
+                {
+                    // For new calls, check for active tickets excluding the current one
+                    bool hasActiveTicket = await TicketService.HasActiveTicketAsync(servicePointId, currentServiceProviderId, ticket.TicketNumber);
+                    if (hasActiveTicket)
+                    {
+                        ToastService.Notify(new ToastMessage
+                            {
+                                Type = ToastType.Warning,
+                                Title = "Cannot Call Patient",
+                                Message = "You already have an active ticket. Please finish serving the current customer first."
+                            });
+                        return;
+                    }
+
+                    // Try to lock the ticket first if we don't have it
+                    bool locked = await TicketService.LockTicketAsync(ticket.Id, currentServiceProviderId);
+                    if (!locked)
+                    {
+                        if (ticket.IsLocked)
+                        {
+                            ToastService.Notify(new ToastMessage
+                                {
+                                    Type = ToastType.Warning,
+                                    Title = "Cannot Call Patient",
+                                    Message = "This ticket is being handled by another service provider."
+                                });
+                        }
+                        return;
+                    }
+
+                    // Proceed with first-time calling
+                    await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName, servicePointId, currentServiceProviderId);
+                    await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+
+                    ToastService.Notify(new ToastMessage
+                        {
+                            Type = ToastType.Info,
+                            Title = "Patient Called",
+                            Message = $"Patient with Ticket Number {ticket.TicketNumber} has been called to {ticket.ServiceName}."
+                        });
+                }
+            }
+            else
+            {
+                // For non-pooling mode
+                if (ticket.Status == TicketStatus.Called)
+                {
+                    // This is a recall, proceed without checking for active tickets
+                    await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName, servicePointId);
+                    await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+
+                    ToastService.Notify(new ToastMessage
+                        {
+                            Type = ToastType.Info,
+                            Title = "Patient Recalled",
+                            Message = $"Patient with Ticket Number {ticket.TicketNumber} has been recalled to {ticket.ServiceName}."
+                        });
+                }
+                else
+                {
+                    // Check for active tickets excluding the current one
+                    bool hasActiveTicket = await TicketService.HasActiveTicketAsync(servicePointId, null, ticket.TicketNumber);
+                    if (hasActiveTicket)
+                    {
+                        ToastService.Notify(new ToastMessage
+                        {
+                            Type = ToastType.Warning,
+                            Title = "Cannot Call Patient",
+                            Message = "You already have an active ticket. Please finish serving the current customer first."
+                        });
+                        return;
+                    }
+
+                    // Non-pooling mode - proceed as normal
+                    await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName, servicePointId);
+                    await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+                    //await smsService.SendSmsAsync(ticket.CustomerPhoneNumber, $"Your ticket number {ticket.TicketNumber} has been called.Proceed to  {ticket.ServiceName}.");
+
+                    ToastService.Notify(new ToastMessage
+                        {
+                            Type = ToastType.Info,
+                            Title = "Patient Called",
+                            Message = $"Patient with Ticket Number {ticket.TicketNumber} has been called to {ticket.ServiceName}."
+                        });
+
+                    //await JS.InvokeVoidAsync("textToSpeech", $"Ticket Number {ticket.TicketNumber}, please proceed to {ticket.ServiceName}");
+                }
+
+                RefreshTicketList();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (isPoolingEnabled)
+            {
+                await TicketService.UnlockTicketAsync(ticket.Id);
+            }
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = $"Failed to call patient: {ex.Message}"
+                });
+        }
+    }
+
+    // private async Task CallPatient(Ticket ticket)
+    // {
+    //     try
+    //     {
+    //         await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+    //         await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName);
+    //         //await smsService.SendSmsAsync(ticket.CustomerPhoneNumber, $"Your ticket number {ticket.TicketNumber} has been called.Proceed to  {ticket.ServiceName}.");
+
+    //         ToastService.Notify(new ToastMessage
+    //             {
+    //                 Type = ToastType.Info,
+    //                 Title = "Patient Called",
+    //                 Message = $"Patient with Ticket Number {ticket.TicketNumber} has been called to {ticket.ServiceName}."
+    //             });
+
+    //         //await JS.InvokeVoidAsync("textToSpeech", $"Ticket Number {ticket.TicketNumber}, please proceed to {ticket.ServiceName}");
+
+    //         RefreshTicketList();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         ToastService.Notify(new ToastMessage
+    //             {
+    //                 Type = ToastType.Danger,
+    //                 Title = "Error",
+    //                 Message = $"Failed to call patient: {ex.Message}"
+    //             });
+    //     }
+    // }
+
+    private async Task MarkAsNoShow(Ticket ticket)
+    {
+        confirmationMessage = $"Are you sure you want to mark Ticket Number {ticket.TicketNumber} as No Show? The ticket will be moved to the end of the queue.";
+        confirmedAction = async () =>
+        {
+            try
+            {
+                // Mark the ticket as previously being a no-show
+                await TicketService.UpdateTicketNoShowStatusAsync(ticket.Id, true, DateTime.Now);
+
+                // First mark the ticket as "No Show" temporarily
+                await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.NoShow);
+
+                // Move the ticket to the end of the queue based on pooling mode
+                if (isPoolingEnabled)
+                {
+                    await TicketService.MoveTicketToEndOfQueueAsync(ticket.Id);
+                }
+                else
+                {
+                    await TicketService.MoveTicketToEndOfServicePointQueueAsync(ticket.Id, servicePointId);
+                }
+
+                // Reset the ticket status to "Waiting"
+                await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.InQueue);
+
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Warning,
+                        Title = "No Show - Moved to End",
+                        Message = $"Ticket Number {ticket.TicketNumber} has been marked as No Show and moved to the end of the queue."
+                    });
+
+                await RefreshTicketList();
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"Failed to process No Show ticket: {ex.Message}"
+                    });
+            }
+        };
+        await confirmationModal.ShowAsync();
+    }
+
+    private async Task RemoveFromQueue(Ticket ticket)
+    {
+        confirmationMessage = $"Are you sure you want to remove Ticket Number {ticket.TicketNumber} from the queue?";
+        confirmedAction = async () =>
+        {
+            try
+            {
+                await TicketService.RemoveTicketFromQueueAsync(ticket);
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Ticket Removed",
+                        Message = $"Ticket Number {ticket.TicketNumber} has been removed from the queue."
+                    });
+                RefreshTicketList();
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"Failed to remove ticket from queue: {ex.Message}"
+                    });
+            }
+        };
+        await confirmationModal.ShowAsync();
+    }
+
+    private async Task ShowReQueueModal(Ticket ticket)
+    {
+        selectedTicket = ticket;
+        selectedService = string.Empty;
+        await reQueueModal.ShowAsync();
+    }
+
+    private async Task ReQueuePatient()
+    {
+        if (selectedTicket != null && !string.IsNullOrEmpty(selectedService))
+        {
+            try
+            {
+                // Update the existing ticket
+                await TicketService.TransferTicket(selectedTicket.Id, selectedService);
+
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Patient Re-Queued",
+                        Message = $"Patient with Ticket Number {selectedTicket.TicketNumber} has been re-queued to {selectedService}."
+                    });
+
+                RefreshTicketList();
+                await reQueueModal.HideAsync();
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"Failed to re-queue patient: {ex.Message}"
+                    });
+            }
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Warning,
+                    Title = "Re-Queue Failed",
+                    Message = "Please select a service before re-queuing."
+                });
+        }
+    }
+
+    private async Task MarkAsShowedUp(Ticket ticket)
+    {
+        try
+        {
+            showUpTime = DateTime.Now;
+            await TicketService.UpdateTicketStatusAsync(ticket.Id, "In-Service", showUpTime);
+
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "Customer Showed Up",
+                    Message = $"Ticket Number {ticket.TicketNumber} has been marked as Showed Up."
+                });
+
+            await RefreshTicketList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = $"Failed to mark ticket as Showed Up: {ex.Message}"
+                });
+        }
+    }
+
+    private async Task MarkAsFinished(Ticket ticket)
+    {
+        confirmationMessage = $"Are you sure you want to mark Ticket Number {ticket.TicketNumber} as Finished?";
+        confirmedAction = async () =>
+        {
+            try
+            {
+                var finishTime = DateTime.Now;
+
+                using var context = DbFactory.CreateDbContext();
+                var service = await context.Services
+                .Where(s => s.Name == ticket.ServiceName)
+                .FirstOrDefaultAsync();
+
+                var servedTicket = new ServedTicket
+                    {
+                        TicketNumber = ticket.TicketNumber,
+                        CustomerName = ticket.CustomerName ?? null,
+                        CustomerPhoneNumber = ticket.CustomerPhoneNumber ?? null,
+                        ServiceName = ticket.ServiceName,
+                        PrintTime = ticket.PrintTime,
+                        ShowUpTime = ticket.ShowUpTime,
+                        ServicePointAssignmentTime = ticket.ServicePointAssignmentTime,
+                        FinishTime = finishTime,
+                        ServiceId = service.Id,
+                        ServicePointId = ticket.ServicePointId
+                    };
+
+                await TicketService.SaveServedTicketAsync(servedTicket);
+                //state = ServiceState.Finished;
+                //TicketService.RemoveTicketFromQueue(ticket);
+
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Service Completed",
+                        Message = $"Ticket Number {ticket.TicketNumber} has been marked as Finished."
+                    });
+
+                await RefreshTicketList();
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"Failed to mark ticket as Finished: {ex.Message}"
+                    });
+            }
+        };
+        await confirmationModal.ShowAsync();
+    }
+
+    private async Task ShowFinishModal(Ticket ticket)
+    {
+        selectedTicket = ticket;
+        selectedTransferService = "";
+
+        // Ensure services are loaded before showing modal
+        if (services == null || !services.Any())
+        {
+            await LoadServices();
+        }
+
+        await finishModal.ShowAsync();
+    }
+
+    private async Task FinishAndTransfer()
+    {
+        if (selectedTicket == null)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = "No ticket selected to finish"
+                });
+            return;
+        }
+
+        try
+        {
+            var finishTime = DateTime.Now;
+
+            using var context = DbFactory.CreateDbContext();
+            var service = await context.Services
+            .Where(s => s.Name == selectedTicket.ServiceName)
+            .FirstOrDefaultAsync();
+
+            var servedTicket = new ServedTicket
+                {
+                    TicketNumber = selectedTicket.TicketNumber,
+                    CustomerName = selectedTicket.CustomerName ?? null,
+                    CustomerPhoneNumber = selectedTicket.CustomerPhoneNumber ?? null,
+                    ServiceName = selectedTicket.ServiceName,
+                    PrintTime = selectedTicket.PrintTime,
+                    ShowUpTime = selectedTicket.ShowUpTime,
+                    ServicePointAssignmentTime = selectedTicket.ServicePointAssignmentTime,
+                    FinishTime = finishTime,
+                    ServiceId = service.Id,
+                    ServicePointId = selectedTicket.ServicePointId
+                };
+
+            await TicketService.SaveServedTicketAsync(servedTicket);
+
+            if (!string.IsNullOrEmpty(selectedTransferService))
+            {
+                await TicketService.TransferTicket(selectedTicket.Id, selectedTransferService);
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Service Completed",
+                        Message = $"Ticket Number {selectedTicket.TicketNumber} has been finished and transferred to {selectedTransferService}."
+                    });
+            }
+            else
+            {
+                await TicketService.RemoveTicketFromQueueAsync(selectedTicket);
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Service Completed",
+                        Message = $"Ticket Number {selectedTicket.TicketNumber} has been finished and removed from the queue."
+                    });
+            }
+
+            await finishModal.HideAsync();
+            await RefreshTicketList();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = $"Failed to finish service: {ex.Message}"
+                });
+        }
+    }
+
+    private async Task ConfirmAction()
+    {
+        await confirmationModal.HideAsync();
+        if (confirmedAction != null)
+        {
+            await confirmedAction.Invoke();
+        }
+    }
+
+    private async Task CloseModal()
+    {
+        await confirmationModal.HideAsync();
+        await reQueueModal.HideAsync();
+        await finishModal.HideAsync();
+    }
+
+    private async Task RefreshTicketList()
+    {
+        queuedTickets = await TicketService.GetTicketsByServicePointIdAsync(servicePointId);
+        // Ensure the component re-renders
+        StateHasChanged();
+    }
+
+    // Update the view to hide/show elements based on pooling
+    private RenderFragment GetServicePointControls() => builder =>
+    {
+        if (!isPoolingEnabled)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "row mb-3");
+
+            builder.OpenElement(2, "div");
+            builder.AddAttribute(3, "class", "col-md-6");
+            builder.OpenComponent<SwitchRooms>(4);
+            builder.AddAttribute(5, "OnRoomSwitched", EventCallback.Factory.Create<int>(this, HandleRoomSwitch));
+            builder.CloseComponent();
+            builder.CloseElement();
+
+            builder.OpenElement(6, "div");
+            builder.AddAttribute(7, "class", "col-md-6 mt-2");
+            // Add status dropdown here
+            builder.CloseElement();
+
+            builder.CloseElement();
+        }
+    };
+
+    public void Dispose()
+    {
+        TicketService.TicketQueueAlteredEvent -= OnTicketQueueAltered;
+    }
+}
+
+<script>
+    window.printTicket = function (base64pdf) {
+        return new Promise((resolve) => {
+            var blob = b64toBlob(base64pdf, 'application/pdf');
+            var blobUrl = URL.createObjectURL(blob);
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = blobUrl;
+            document.body.appendChild(iframe);
+
+            iframe.onload = function () {
+                setTimeout(function () {
+                    iframe.contentWindow.print();
+                    iframe.onafterprint = function () {
+                        document.body.removeChild(iframe);
+                        URL.revokeObjectURL(blobUrl);
+                        resolve();
+                    };
+                });
+            };
+        });
+    };
+
+    function b64toBlob(b64Data, contentType = '', sliceSize = 512) {
+        const byteCharacters = atob(b64Data);
+        const byteArrays = [];
+
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+            const slice = byteCharacters.slice(offset, offset + sliceSize);
+            const byteNumbers = new Array(slice.length);
+            for (let i = 0; i < slice.length; i++) {
+                byteNumbers[i] = slice.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            byteArrays.push(byteArray);
+        }
+
+        const blob = new Blob(byteArrays, { type: contentType });
+        return blob;
+    }
+</script>

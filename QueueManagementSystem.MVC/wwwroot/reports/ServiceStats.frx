@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report ScriptLanguage="CSharp" ReportInfo.Created="12/27/2023 20:59:39" ReportInfo.Modified="01/25/2024 08:31:50" ReportInfo.CreatorVersion="2024.1.3.0">
+  <Dictionary>
+    <BusinessObjectDataSource Name="Categories BusinessObject" ReferenceName="Categories BusinessObject" DataType="System.Int32" Enabled="true">
+      <Column Name="Name" DataType="System.String"/>
+      <Column Name="Description" DataType="System.String"/>
+      <BusinessObjectDataSource Name="Products1" Alias="Products" DataType="System.Int32" PropName="Products" Enabled="true">
+        <Column Name="Name" DataType="System.String"/>
+        <Column Name="UnitPrice" DataType="System.Decimal"/>
+      </BusinessObjectDataSource>
+    </BusinessObjectDataSource>
+    <BusinessObjectDataSource Name="spAnalytics" ReferenceName="spAnalytics" DataType="System.Int32" Enabled="true">
+      <Column Name="servicePointID" DataType="System.String"/>
+      <Column Name="serviceDescription" DataType="System.String"/>
+      <Column Name="avgWaitingTime" DataType="System.TimeSpan"/>
+      <Column Name="avgServiceTime" DataType="System.TimeSpan"/>
+      <Column Name="totalCustomers" DataType="System.Int32"/>
+    </BusinessObjectDataSource>
+    <BusinessObjectDataSource Name="serviceStats" ReferenceName="serviceStats" DataType="System.Collections.Generic.List`1[[QueueManagementSystem.MVC.Models.ServiceStat, Queue Management System, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]" Enabled="true">
+      <Column Name="AverageWaitingTime" DataType="System.TimeSpan"/>
+      <Column Name="AverageServiceTime" DataType="System.TimeSpan"/>
+      <Column Name="TotalOfferings" DataType="System.Int32"/>
+      <Column Name="Name" DataType="System.String"/>
+    </BusinessObjectDataSource>
+  </Dictionary>
+  <ReportPage Name="Page1" Guides="670.95" Watermark.Font="Arial, 60pt">
+    <ReportTitleBand Name="ReportTitle1" Width="718.2" Height="47.25" Fill.Color="LightGray">
+      <TextObject Name="Text9" Left="226.8" Top="18.9" Width="283.5" Height="28.35" Text="SERVICE ANALYTICS" AutoWidth="true" Font="Boston Traffic, 16pt, style=Underline"/>
+    </ReportTitleBand>
+    <PageHeaderBand Name="PageHeader1" Top="51.25" Width="718.2" Height="28.35">
+      <TextObject Name="Text1" Left="75.6" Top="9.45" Width="122.85" Height="18.9" Text="Service Name" AutoWidth="true" Font="Arial, 12pt, style=Bold, Underline"/>
+      <TextObject Name="Text4" Left="264.6" Top="9.45" Width="189" Height="18.9" Text="Avg Waiting Time(mm:ss)" AutoWidth="true" Font="Arial, 12pt, style=Bold, Underline"/>
+      <TextObject Name="Text5" Left="481.95" Top="9.45" Width="189" Height="18.9" Text="Avg Service Time(mm:ss)" AutoWidth="true" Font="Arial, 12pt, style=Bold, Underline"/>
+    </PageHeaderBand>
+    <DataBand Name="Data1" Top="83.6" Width="718.2" Height="75.6" DataSource="serviceStats">
+      <TextObject Name="Text2" Left="75.6" Top="28.35" Width="151.2" Height="28.35" Text="[serviceStats.Name]" Font="Arial, 12pt"/>
+      <TextObject Name="Text7" Left="292.95" Top="28.35" Width="122.85" Height="28.35" Text="[serviceStats.AverageWaitingTime]" Format="Time" Format.Format="mm:ss" Font="Arial, 12pt"/>
+      <TextObject Name="Text8" Left="510.3" Top="28.35" Width="141.75" Height="28.35" Text="[serviceStats.AverageServiceTime]" Format="Time" Format.Format="mm:ss" Font="Arial, 12pt"/>
+    </DataBand>
+    <PageFooterBand Name="PageFooter1" Top="205" Width="718.2" Height="18.9"/>
+  </ReportPage>
+</Report>

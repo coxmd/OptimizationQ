@@ -1,0 +1,14 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    Layout = "_LayoutNoNav";
+}
+
+
+<div>
+    @(await Html.RenderComponentAsync<FeedbackCollection>(RenderMode.ServerPrerendered))
+</div>
+
+
+
+
+

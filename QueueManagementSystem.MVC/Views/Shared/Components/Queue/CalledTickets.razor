@@ -1,0 +1,374 @@
+@using QueueManagementSystem.MVC.Services
+@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.Speech.Synthesis
+@namespace QueueManagementSystem.MVC.Components
+@inject ITicketService TicketService
+@inject IConfigurationService ConfigService
+@inject IJSRuntime JS
+@inject ILogger<CalledTickets> Logger
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+
+<link rel="stylesheet" href="/css/calledTickets.css" asp-append-version="true" />
+
+<div class="display-container">
+    <div class="left-column">
+        <div class="ticket-display">
+            @if (calledTicketsList.Count == 0)
+            {
+                <div class="ticket-info">
+                    <span class="ticket-number">Panel</span>
+                    <span class="ticket-destination">Loaded</span>
+                </div>
+            }
+            else
+            {
+                @foreach (var ticket in calledTicketsList.Take(1))
+                {
+                    <div class="ticket-info">
+                        <span class="ticket-number">@ticket.Item1</span>
+                        <div class="destination-wrapper">
+                            <span class="ticket-destination">@ticket.Item2</span>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+        <div class="advertisement-section">
+            <video id="advert-video" class="advertisement-video" autoplay muted>
+                <source src="" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+
+
+    </div>
+    <div class="right-column">
+        <div class="waiting-queue">
+            @foreach (var ticket in pendingAnnouncements)
+            {
+                <div class="waiting-ticket">
+                    <span class="waiting-number">@ticket.Item1</span>
+                    <span class="waiting-destination">@ticket.Item2</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<script>
+    window.QueueManagement = {
+        currentUtterance: null,
+        speakingQueue: [],
+        isProcessing: false,
+
+        findBestVoiceForLanguage(voices) {
+            // First try to find specific voices we want
+            const preferredVoices = [
+                { name: 'Google UK English Female', lang: 'en-GB' },
+                { name: 'Microsoft Libby', lang: 'en-GB' },
+                { name: 'Microsoft Zira', lang: 'en-US' },
+                { name: 'Google US English', lang: 'en-US' }
+            ];
+
+            // Try to find preferred voices first
+            for (const pref of preferredVoices) {
+                const voice = voices.find(v =>
+                    v.name.toLowerCase().includes(pref.name.toLowerCase()) &&
+                    v.lang.startsWith('en'));
+                if (voice) {
+                    console.log(`Found preferred voice: ${voice.name}`);
+                    return voice;
+                }
+            }
+
+            // Fallback to any English voice with priority for GB
+            const gbVoice = voices.find(v => v.lang === 'en-GB');
+            if (gbVoice) {
+                console.log(`Found GB fallback voice: ${gbVoice.name}`);
+                return gbVoice;
+            }
+
+            // Last resort: any English voice
+            const anyEnglishVoice = voices.find(v => v.lang.startsWith('en'));
+            if (anyEnglishVoice) {
+                console.log(`Found fallback English voice: ${anyEnglishVoice.name}`);
+                return anyEnglishVoice;
+            }
+
+            console.warn('No suitable English voice found, using default system voice');
+            return null;
+        },
+
+        createUtterance(ticketNumber, destination) {
+            const formattedTicketNumber = ticketNumber.toString().split('').join(' ');
+            const text = `Ticket Number... ${formattedTicketNumber}... please proceed to ${destination}`;
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            // Force voice reload in Chrome
+            window.speechSynthesis.cancel();
+            const voices = window.speechSynthesis.getVoices();
+            const selectedVoice = this.findBestVoiceForLanguage(voices);
+
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+                utterance.voiceURI = selectedVoice.voiceURI;
+                console.log(`Using voice: ${selectedVoice.name} (${selectedVoice.lang})`);
+            }
+
+            utterance.rate = 0.85;
+            utterance.pitch = 1.15;
+            utterance.volume = 1.0;
+            utterance.lang = 'en-GB';
+
+            return utterance;
+        },
+
+        async speakText(utterance) {
+            return new Promise((resolve, reject) => {
+                // Cancel any ongoing speech
+                window.speechSynthesis.cancel();
+
+                utterance.onstart = () => {
+                    console.log('Started speaking:', utterance.text);
+                    this.currentUtterance = utterance;
+                };
+
+                utterance.onend = () => {
+                    console.log('Finished speaking');
+                    this.currentUtterance = null;
+                    resolve();
+                };
+
+                utterance.onerror = (event) => {
+                    console.error('Speech synthesis error:', event);
+                    this.currentUtterance = null;
+
+                    if (event.error === 'interrupted' || event.error === 'canceled') {
+                        resolve();
+                    } else {
+                        // Try one more time with default voice
+                        if (utterance.voice) {
+                            console.log('Retrying with default voice');
+                            utterance.voice = null;
+                            window.speechSynthesis.speak(utterance);
+                        } else {
+                            reject(new Error(`Speech synthesis failed: ${event.error}`));
+                        }
+                    }
+                };
+
+                // Chrome bug fix: keep speech synthesis active
+                const intervalId = setInterval(() => {
+                    if (window.speechSynthesis.speaking) {
+                        window.speechSynthesis.pause();
+                        window.speechSynthesis.resume();
+                    } else {
+                        clearInterval(intervalId);
+                    }
+                }, 5000);
+
+                // Speak with small delay to ensure proper initialization
+                setTimeout(() => {
+                    window.speechSynthesis.speak(utterance);
+                }, 100);
+            });
+        },
+
+        async speakTicket(ticketNumber, destination, repeatCount) {
+            const repetitions = parseInt(repeatCount) || 2;
+            console.log(`Speaking ticket ${ticketNumber} ${repetitions} times`);
+
+            this.speakingQueue.push({
+                ticketNumber: ticketNumber,
+                destination: destination,
+                repetitions: repetitions
+            });
+
+            if (!this.isProcessing) {
+                await this.processQueue();
+            }
+        },
+
+        async processQueue() {
+            if (this.isProcessing || this.speakingQueue.length === 0) return;
+
+            this.isProcessing = true;
+
+            try {
+                while (this.speakingQueue.length > 0) {
+                    const currentItem = this.speakingQueue[0];
+
+                    console.log(`Processing queue item with ${currentItem.repetitions} repetitions`);
+
+                    for (let i = 0; i < currentItem.repetitions; i++) {
+                        try {
+                            const utterance = this.createUtterance(
+                                currentItem.ticketNumber,
+                                currentItem.destination
+                            );
+                            await this.speakText(utterance);
+                            await new Promise(resolve => setTimeout(resolve, 1000));
+                        } catch (error) {
+                            console.error('Failed to speak ticket:', error);
+                        }
+                    }
+
+                    this.speakingQueue.shift();
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
+            } finally {
+                this.isProcessing = false;
+            }
+        }
+    };
+
+    // Initialize speech synthesis
+    window.initSpeechSynthesis = () => {
+        if ('speechSynthesis' in window) {
+            // Chrome requires a user interaction to load voices
+            const loadVoices = () => {
+                const voices = window.speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`));
+                    return true;
+                }
+                return false;
+            };
+
+            // Try loading voices immediately
+            if (!loadVoices()) {
+                // If not available, wait for voiceschanged event
+                window.speechSynthesis.addEventListener('voiceschanged', loadVoices, { once: true });
+            }
+
+            // Chrome fix: periodically reset speech synthesis if page is inactive
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    window.speechSynthesis.cancel();
+                }
+            });
+        } else {
+            console.error('Speech synthesis not supported in this browser');
+        }
+    };
+
+    // Wrapper function for the QueueManagement speakTicket
+    window.speakTicket = (ticketNumber, destination, repeatCount) => {
+        return window.QueueManagement.speakTicket(ticketNumber, destination, repeatCount);
+    };
+</script>
+
+@code {
+    private List<(string, string)> calledTicketsList = new List<(string, string)>();
+    private Queue<(string, string)> pendingAnnouncements = new Queue<(string, string)>();
+    private bool isAnnouncementInProgress = false;
+    private List<Advert> adverts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        TicketService.TicketCalledFromQueueEvent += TicketCalledFromQueue;
+        TicketService.TicketRemovedFromCalledEvent += TicketRemovedFromCalled;
+
+        await LoadAdverts();
+    }
+
+    private async Task LoadAdverts()
+    {
+        using var context = await DbFactory.CreateDbContextAsync();
+        adverts = await context.Adverts.OrderBy(a => a.Order).ToListAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("initSpeechSynthesis");
+            // if (adverts.Any())
+            // {
+            //     await JS.InvokeVoidAsync("initializeAdvertRotation", adverts);
+            // }
+        }
+    }
+
+    private async void TicketCalledFromQueue(object sender, (string, string) e)
+    {
+        await InvokeAsync(async () =>
+        {
+            pendingAnnouncements.Enqueue(e);
+            if (calledTicketsList.Count == 0 && !isAnnouncementInProgress)
+            {
+                calledTicketsList.Add(e);
+                StateHasChanged();
+                await ProcessPendingAnnouncements();
+            }
+        });
+    }
+
+    private async Task ProcessPendingAnnouncements()
+    {
+        if (isAnnouncementInProgress) return;
+
+        while (pendingAnnouncements.Count > 0)
+        {
+            isAnnouncementInProgress = true;
+            var (ticketNumber, destination) = pendingAnnouncements.Peek();
+
+            try
+            {
+                await InvokeAsync(() =>
+                {
+                    calledTicketsList.Clear();
+                    calledTicketsList.Add((ticketNumber, destination));
+                    StateHasChanged();
+                });
+
+                // Get the configured number of repetitions
+                int repetitions = await ConfigService.GetIntConfigurationAsync(
+                    ConfigurationService.TicketCallRepetitions, 2);
+
+                Logger.LogInformation($"Configured repetitions: {repetitions}");
+
+                // Pass the repetitions value explicitly
+                await JS.InvokeVoidAsync("speakTicket",
+                    ticketNumber,
+                    destination,
+                    repetitions);
+                pendingAnnouncements.Dequeue();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to process announcement: {ex.Message}");
+                pendingAnnouncements.Dequeue();
+            }
+            finally
+            {
+                isAnnouncementInProgress = false;
+            }
+        }
+    }
+
+    private async void TicketRemovedFromCalled(object sender, string ticketNumber)
+    {
+        await InvokeAsync(() =>
+        {
+            calledTicketsList.RemoveAll(ct => ct.Item1 == ticketNumber);
+            StateHasChanged();
+        });
+    }
+
+    private async Task RequestSpeechSynthesisPermission()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("requestSpeechSynthesisPermission");
+            await ProcessPendingAnnouncements();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to request speech synthesis permission: {ex.Message}");
+        }
+    }
+
+}

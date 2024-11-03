@@ -1,0 +1,139 @@
+﻿@namespace QueueManagementSystem.MVC.Components
+@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Services
+@using System.Security.Claims
+
+@inject IDbContextManager DbContextManager
+@inject ToastService ToastService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<Modal @ref="dialog" title="@DialogTitle" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <div class="mb-3">
+            @if (!IsSignedIn)
+            {
+                <div class="form-group mb-3">
+                    <label class="form-label">Select Service Point:</label>
+                    <select class="form-select" @bind="selectedServicePointId">
+                        <option value="">Select a service point...</option>
+                        @foreach (var sp in availableServicePoints)
+                        {
+                            <option value="@sp.Id">@sp.Name</option>
+                        }
+                    </select>
+                </div>
+            }
+            <div class="form-group">
+                <label class="form-label">Status:</label>
+                <select class="form-select" @bind="selectedStatus">
+                    <option value="Available">Available</option>
+                    <option value="Stepped out">Stepped out</option>
+                </select>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-12 text-end">
+                @if (IsSignedIn)
+                {
+                    <Button Type="ButtonType.Button" Color="ButtonColor.Warning"
+                            Class="me-2" @onclick="SignOutAsync">
+                        Sign Out
+                    </Button>
+                }
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary"
+                        Class="me-2" @onclick="CloseDialog">
+                    Cancel
+                </Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary"
+                        @onclick="SaveChangesAsync">
+                    @(IsSignedIn ? "Update" : "Sign In")
+                </Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+@code {
+    private Modal dialog;
+    private string selectedStatus = "Available";
+    private int? selectedServicePointId;
+    private List<ServicePoint> availableServicePoints = new List<ServicePoint>();
+    private List<ToastMessage> messages = new List<ToastMessage>();
+
+    [Parameter] public bool IsSignedIn { get; set; }
+    [Parameter] public EventCallback<ServicePointDialogResult> OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private string DialogTitle => IsSignedIn ? "Update Service Point Status" : "Sign In to Service Point";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadServicePoints();
+    }
+
+    private async Task LoadServicePoints()
+    {
+        await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var serviceProviderId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            var serviceProvider = await context.ServiceProviders
+                .Include(sp => sp.Service)
+                .SingleOrDefaultAsync(sp => sp.Id.ToString() == serviceProviderId);
+
+            availableServicePoints = await context.ServicePoints
+                .Where(sp => sp.ServiceId == serviceProvider.ServiceId)
+                .ToListAsync();
+        });
+    }
+
+    public async Task ShowAsync()
+    {
+        await dialog.ShowAsync();
+    }
+
+    private async Task CloseDialog()
+    {
+        await dialog.HideAsync();
+        await OnCancel.InvokeAsync();
+    }
+
+    private async Task SaveChangesAsync()
+    {
+        if (!IsSignedIn && !selectedServicePointId.HasValue)
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Warning,
+                    Title = "Selection Required",
+                    Message = "Please select a service point."
+                });
+            return;
+        }
+
+        var result = new ServicePointDialogResult
+            {
+                ServicePointId = selectedServicePointId ?? 0,
+                Status = selectedStatus,
+                Action = IsSignedIn ? DialogAction.Update : DialogAction.SignIn
+            };
+
+        await OnSave.InvokeAsync(result);
+        await dialog.HideAsync();
+    }
+
+    private async Task SignOutAsync()
+    {
+        var result = new ServicePointDialogResult
+            {
+                Action = DialogAction.SignOut
+            };
+
+        await OnSave.InvokeAsync(result);
+        await dialog.HideAsync();
+    }
+}

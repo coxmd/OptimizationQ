@@ -1,0 +1,10 @@
+﻿@using QueueManagementSystem.MVC.Components
+
+<div class="text-center m-2">
+    <h3>Register System Users</h3><br />
+
+</div>
+
+<div>
+    @(await Html.RenderComponentAsync<SystemUsers>(RenderMode.ServerPrerendered))
+</div>

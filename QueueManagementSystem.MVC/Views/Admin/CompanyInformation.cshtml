@@ -1,0 +1,17 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Configure Services";
+}
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+
+    <div>
+        @(await Html.RenderComponentAsync<CompanyInformationPage>(RenderMode.ServerPrerendered))
+    </div>
+</body>
+</html>
+

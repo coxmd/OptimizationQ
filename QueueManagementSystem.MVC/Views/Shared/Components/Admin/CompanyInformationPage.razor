@@ -1,0 +1,156 @@
+﻿@using System.IO
+@using QueueManagementSystem.MVC.Models
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.ComponentModel.DataAnnotations
+@using SixLabors.ImageSharp
+@using SixLabors.ImageSharp.Formats.Jpeg
+@using SixLabors.ImageSharp.Processing
+@namespace QueueManagementSystem.MVC.Components
+@inject IDbContextFactory<QueueManagementSystemContext> DbFactory
+@inject ToastService ToastService
+
+<div class="card" style="padding:20px;background-color:#E6F2F2">
+    <div class="row">
+        <h4>Company Information</h4>
+        <EditForm Model="@companyInfo" OnValidSubmit="OnValidFormSubmit">
+            <DataAnnotationsValidator />
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Company Name <span class="text-danger">*</span></label>
+                        <InputText class="form-control" @bind-Value="companyInfo.CompanyName" />
+                        <ValidationMessage For="@(() => companyInfo.CompanyName)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Physical Address <span class="text-danger">*</span></label>
+                        <InputTextArea class="form-control" @bind-Value="companyInfo.PhysicalAddress" />
+                        <ValidationMessage For="@(() => companyInfo.PhysicalAddress)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Website</label>
+                        <InputText class="form-control" @bind-Value="companyInfo.Website" />
+                        <ValidationMessage For="@(() => companyInfo.Website)" />
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label">Report Footer Message</label>
+                        <InputTextArea class="form-control" @bind-Value="companyInfo.ReportFooterMessage" />
+                        <ValidationMessage For="@(() => companyInfo.ReportFooterMessage)" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Company Logo</label>
+                        <InputFile class="form-control" OnChange="OnFileChange" accept=".jpg,.jpeg,.png" />
+                        @if (!string.IsNullOrEmpty(companyInfo.Logo))
+                        {
+                            <div class="mt-2">
+                                <img src="@companyInfo.Logo" alt="Company Logo" style="max-width: 200px; max-height: 200px;" />
+                                <button type="button" class="btn btn-sm btn-danger ms-2" @onclick="RemoveLogo">
+                                    Remove Logo
+                                </button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-12 text-right">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Small" Color="ButtonColor.Success" Class="float-end">
+                        Save Changes
+                    </Button>
+                </div>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private CompanyInformation companyInfo = new();
+    private const int MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+    private const int MaxImageDimension = 800; // Maximum width or height
+
+    protected override async Task OnInitializedAsync()
+    {
+        using var context = DbFactory.CreateDbContext();
+        companyInfo = await context.CompanyInformation.FirstOrDefaultAsync()
+            ?? new CompanyInformation();
+    }
+
+    private async Task OnFileChange(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            if (file.Size > MaxFileSizeBytes)
+            {
+                ToastService.Notify(new(ToastType.Warning, "File size must be less than 5MB."));
+                return;
+            }
+
+            using var stream = file.OpenReadStream(MaxFileSizeBytes);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+
+            // Compress the image
+            using var image = SixLabors.ImageSharp.Image.Load(ms.ToArray());
+
+            // Resize if necessary while maintaining aspect ratio
+            if (image.Width > MaxImageDimension || image.Height > MaxImageDimension)
+            {
+                var scale = MaxImageDimension / (double)Math.Max(image.Width, image.Height);
+                image.Mutate(x => x.Resize((int)(image.Width * scale), (int)(image.Height * scale)));
+            }
+
+            // Compress and convert to base64
+            using var outputMs = new MemoryStream();
+            image.Save(outputMs, new JpegEncoder { Quality = 75 });
+            var base64String = Convert.ToBase64String(outputMs.ToArray());
+            companyInfo.Logo = $"data:image/jpeg;base64,{base64String}";
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error processing image: {ex.Message}"));
+        }
+    }
+
+    private void RemoveLogo()
+    {
+        companyInfo.Logo = null;
+    }
+
+    private async Task OnValidFormSubmit()
+    {
+        try
+        {
+            using var context = DbFactory.CreateDbContext();
+            companyInfo.LastUpdated = DateTime.Now;
+
+            if (companyInfo.Id == 0)
+            {
+                context.CompanyInformation.Add(companyInfo);
+            }
+            else
+            {
+                context.CompanyInformation.Update(companyInfo);
+            }
+
+            await context.SaveChangesAsync();
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "SUCCESS",
+                    HelpText = $"{DateTime.Now}",
+                    Message = "Company information updated successfully."
+                });
+        }
+        catch (Exception ex)
+        {
+            ToastService.Notify(new(ToastType.Danger, $"Error: {ex.Message}"));
+        }
+    }
+}

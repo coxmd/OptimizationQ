@@ -1,0 +1,101 @@
+﻿@page "/reports"
+@using System
+@using System.Threading.Tasks
+@using QueueManagementSystem.MVC.Services
+@using FastReport.Web
+@using Microsoft.AspNetCore.Html
+@using QRCoder
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IReportService ReportService
+@inject NavigationManager NavigationManager
+
+<h3>Generate Custom Report</h3>
+
+<EditForm Model="@reportParameters" OnValidSubmit="@HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label for="startDate">Start Date:</label>
+        <InputDate id="startDate" @bind-Value="reportParameters.StartDate" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label for="endDate">End Date:</label>
+        <InputDate id="endDate" @bind-Value="reportParameters.EndDate" class="form-control" />
+    </div>
+
+    <div class="form-group">
+        <label for="reportType">Report Type:</label>
+        <InputSelect id="reportType" @bind-Value="reportParameters.ReportType" class="form-control">
+            <option value="">Select a report type...</option>
+            <option value="AverageWaitingTimePerService">Average Waiting Time Per Service</option>
+            <option value="AverageWaitingTimePerServicePoint">Average Waiting Time Per Service Point</option>
+            <option value="AverageServiceTimePerService">Average Service Time Per Service</option>
+            <option value="AverageServiceTimePerServicePoint">Average Service Time Per Service Point</option>
+            <option value="CustomersServed">Customers Served</option>
+        </InputSelect>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Generate Report</button>
+</EditForm>
+
+@if (reportGenerated && WebReport != null)
+{
+    <div style="width: 100%; height: 800px;">
+        @((MarkupString)renderedReport)
+    </div>
+}
+
+@code {
+    private ReportParameters reportParameters = new ReportParameters();
+    private bool reportGenerated = false;
+    private WebReport WebReport;
+    private string renderedReport = "";
+    private byte[] qrCodeImage;
+
+    public static byte[] GenerateQRCode(string url)
+    {
+        var qrGenerator = new QRCodeGenerator();
+        var qrCodeData = qrGenerator.CreateQrCode(url, QRCodeGenerator.ECCLevel.Q);
+        var qrCode = new BitmapByteQRCode(qrCodeData);
+        return qrCode.GetGraphic(7);
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        var url = NavigationManager.ToAbsoluteUri("Queue/TicketTrackingPage").ToString();
+        qrCodeImage = GenerateQRCode(url);
+
+        //Generate the report based on the selected parameters
+        WebReport = ReportService.GenerateWebReport(
+            reportParameters.ReportType,
+            reportParameters.StartDate.ToString("dd/MM/yyyy"),
+            reportParameters.EndDate.ToString("dd/MM/yyyy"),
+            qrCodeImage
+        );
+
+        // Set up the WebReport component
+        WebReport.Width = "100%";
+        WebReport.Height = "800px";
+
+        //Render the report
+        var htmlContent = await WebReport.Render();
+        renderedReport = htmlContent.ToString();
+
+
+        reportGenerated = true;
+
+        StateHasChanged();
+    }
+
+    public class ReportParameters
+    {
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public string ReportType { get; set; }
+    }
+}
+ 

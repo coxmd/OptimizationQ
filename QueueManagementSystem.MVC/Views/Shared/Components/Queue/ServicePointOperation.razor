@@ -1,0 +1,239 @@
+@using System
+@using Microsoft.AspNetCore.Components
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@using System.Security.Claims
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject ITicketService TicketService
+@inject IDbContextManager DbContextManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ToastService ToastService
+
+@* <h5 class="display-6 text-center">You are now in @servicePointName offering @($"{serviceName}s")</h5> *@
+<div class="display-6 text-center mt-5">
+    @if (state == ServiceState.Idle)
+    {
+        if (alertMessage != null)
+        {
+            <Alert Color="AlertColor.Warning" Dismissable="true">@alertMessage</Alert>
+        }
+        @* <p>Waiting to get next ticket....</p> *@
+        <button class="btn btn-primary" @onclick="(() => GetNextTicket(serviceName, servicePointName))">Get Next Ticket</button>
+        <button class="btn btn-primary" @onclick="(() => RecallNoShowTicket(serviceName, servicePointName))">Recall No Show Ticket</button>
+
+    } 
+
+    else if (state == ServiceState.Waiting)
+    {
+        @* <p>Waiting for Ticket Number: @calledTicket.TicketNumber</p> *@
+        <button class="btn btn-primary" @onclick="MarkAsShowedUp">Mark as Showed Up</button>
+        <button class="btn btn-primary" @onclick="MarkAsNoShow">Mark as No Show</button>
+    }
+
+    else if (state == ServiceState.Serving)
+    {
+        <p>Serving Ticket NUmber: @calledTicket.TicketNumber</p>
+        <button class="btn btn-primary" @onclick="MarkAsFinished">Mark as Finished</button>
+    }
+
+    else if (state == ServiceState.Finished)
+    {
+        <p>Finished Serving Ticket Number: @calledTicket.TicketNumber</p>
+        if (OfferedServices == null)
+        {
+            <h4>Services Loading...</h4>
+        }
+        else
+        {
+            <span>Select a service to transfer:</span>
+            <select class="form-control" @bind="transferService">
+                <option value="">Dont Transfer</option>
+                @foreach (var service in OfferedServices.Where(s => s.Name != serviceName))
+                {
+                    <option value="@service.Name">@service.Name</option>
+                }
+            </select>
+        }
+        
+        <button class="btn btn-primary" @onclick="Transfer">Complete Service</button>
+    }
+</div>
+
+
+@code{
+    enum ServiceState
+    {
+        Idle,
+        Waiting,
+        Serving,
+        Finished,
+    }
+
+    private string? serviceName;
+    private string? servicePointName;
+    private ServiceState state = ServiceState.Idle;
+    private Ticket calledTicket = null;
+    private DateTime showUpTime;
+    private DateTime finishTime;
+    private List<Service> OfferedServices;
+    private string transferService = "";
+    private string? alertMessage = null;
+
+    private async Task GetNextTicket(string serviceName, string calledServicePointName)
+    {
+        //get ticket from ticket queue where service == ?
+        calledTicket = await TicketService.GetTicketFromQueueAsync(serviceName, calledServicePointName);
+        if (calledTicket != null)
+        {
+            state = ServiceState.Waiting;
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"No pending ticket for {serviceName}"
+                    });
+            alertMessage = $"No pending ticket for {serviceName}";
+        }
+    }
+
+    private void RecallNoShowTicket(string serviceName, string calledServicePoint)
+    {
+        calledTicket = TicketService.GetNoShowTicket(serviceName, calledServicePoint);
+
+        if (calledTicket != null)
+        {
+            state = ServiceState.Waiting;
+        }
+        else
+        {
+            //no pending ticket in queue
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = $"NO pending ticket with service name {serviceName}"
+                });
+            alertMessage = $"No pending no-show ticket for {serviceName}";
+        }
+    }
+    private async Task MarkAsShowedUp()
+    {
+        showUpTime = DateTime.Now;
+        state = ServiceState.Serving;
+        await TicketService.UpdateTicketStatusAsync(calledTicket.Id, "In-Service"); //TODO:unhardcode status
+
+    }
+
+    private async Task MarkAsNoShow()
+    {
+        state = ServiceState.Idle;
+        await TicketService.UpdateTicketStatusAsync(calledTicket.Id, "No-Show");
+    }
+
+    private async Task MarkAsFinished()
+    {
+        finishTime = DateTime.Now;
+
+        var service = await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            return await context.Services
+                .Where(s => s.Name == calledTicket.ServiceName)
+                .FirstOrDefaultAsync();
+        });
+
+        var servedTicket = new ServedTicket {
+                TicketNumber = calledTicket.TicketNumber,
+                CustomerName = calledTicket.CustomerName,
+                CustomerPhoneNumber = calledTicket.CustomerPhoneNumber,
+                ServiceName = calledTicket.ServiceName,
+                PrintTime = calledTicket.PrintTime,
+                ShowUpTime = calledTicket.ShowUpTime,
+                FinishTime = finishTime,
+                ServiceId = service.Id,
+                ServicePointId = calledTicket.ServicePointId
+        };
+
+        //TicketService.RemoveTicketFromQueue(calledTicket);
+        
+        await TicketService.SaveServedTicketAsync(servedTicket);
+        
+        state = ServiceState.Finished;
+    }
+
+    private async Task Transfer()
+    {
+        if (calledTicket == null)
+        {
+            // Handle the case where calledTicket is null
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Danger,
+                    Title = "Error",
+                    Message = $"NO ticket to transfer"
+                });
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(transferService))
+        {
+            try
+            {
+                await TicketService.TransferTicket(calledTicket.Id, transferService);
+
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Success,
+                        Title = "Success",
+                        Message = $"Ticket {calledTicket.TicketNumber} Transfered to {transferService}"
+                    });
+                // Only remove the ticket from the queue if transfer is successful
+                await TicketService.RemoveTicketFromQueueAsync(calledTicket);
+            }
+            catch (Exception ex)
+            {
+                ToastService.Notify(new ToastMessage
+                    {
+                        Type = ToastType.Danger,
+                        Title = "Error",
+                        Message = $"Error Transferring Ticket {ex.Message}"
+                    });
+            }
+        }
+        else
+        {
+            // If no transfer, just remove the ticket from the queue
+            await TicketService.RemoveTicketFromQueueAsync(calledTicket);
+        }
+
+        state = ServiceState.Idle;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // OfferedServices = await DbContextManager.ExecuteInContextAsync(async context =>
+        // {
+        //     return await context.Services.ToListAsync();
+        // });
+
+        // var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        // var user = authState.User;
+        // var serviceProviderId = user.FindFirst(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+
+        // var serviceProvider = await DbContextManager.ExecuteInContextAsync(async context =>
+        // {
+        //     return await context.ServiceProviders
+        //         .Include(sp => sp.ServicePoint!.Service)
+        //         .SingleOrDefaultAsync(sp => sp.Id.ToString() == serviceProviderId);
+        // });
+        // servicePointName = serviceProvider!.ServicePoint!.Name;
+        // serviceName = serviceProvider.ServicePoint.Service!.Name;
+    }
+
+}

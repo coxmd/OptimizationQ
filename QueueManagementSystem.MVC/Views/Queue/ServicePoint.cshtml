@@ -1,0 +1,12 @@
+@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Service Point";
+}
+
+
+
+
+<div>
+    @(await Html.RenderComponentAsync<ServicePointQueue>(RenderMode.Server))
+</div>
+  

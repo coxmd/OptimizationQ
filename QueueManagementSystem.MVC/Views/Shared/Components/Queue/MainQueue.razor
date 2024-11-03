@@ -1,0 +1,440 @@
+﻿@using Microsoft.AspNetCore.Components
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@using Microsoft.EntityFrameworkCore
+@using QueueManagementSystem.MVC.Data
+@namespace QueueManagementSystem.MVC.Components
+@inject NavigationManager NavigationManager
+@inject ITicketService TicketService
+@inject IDbContextManager DbContextManager
+@inject ToastService ToastService
+@inject IJSRuntime JS
+
+<Toasts class="p-3" Messages="messages" AutoHide="true" StackLength="3" Placement="ToastsPlacement.TopRight" />
+
+<h3 class="display-6 text-center">Customers on Queue</h3>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card p-3" style="background-color:#F5F5F5;">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex gap-4">
+                    <!-- Status Filter -->
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="statusFilter" id="inQueue"
+                                   checked="@(currentStatusFilter == "InQueue")"
+                                   @onchange="@(() => FilterByStatus("InQueue"))" />
+                            <label class="form-check-label" for="inQueue">
+                                In Queue (@inQueueCount)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="statusFilter" id="inService"
+                                   checked="@(currentStatusFilter == "InService")"
+                                   @onchange="@(() => FilterByStatus("InService"))" />
+                            <label class="form-check-label" for="inService">
+                                In Service (@inServiceCount)
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (!isPoolingEnabled)
+                    {
+                        <!-- Room Filter -->
+                        <div class="d-flex align-items-center gap-3 ms-4 border-start ps-4">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="roomFilter" id="myRoom"
+                                       checked="@(currentRoomFilter == "MyRoom")"
+                                       @onchange="@(() => FilterByRoom("MyRoom"))" />
+                                <label class="form-check-label" for="myRoom">
+                                    My Room (@myRoomCount)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="roomFilter" id="allRooms"
+                                       checked="@(currentRoomFilter == "AllRooms")"
+                                       @onchange="@(() => FilterByRoom("AllRooms"))" />
+                                <label class="form-check-label" for="allRooms">
+                                    All Rooms (@allRoomsCount)
+                                </label>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+@if (filteredTickets == null || !filteredTickets.Any())
+{
+    <h4>No tickets in queue</h4>
+}
+else
+{
+     <div class="card" style="padding:20px;background-color:#E6F2F2;color:#043927">
+    <Grid @ref="grid" TItem="Ticket" Class="table table-bordered table-light table-sm compact-grid"
+    Data="filteredTickets.OrderByDescending(t => t.IsEmergency).ThenBy(t => t.PrintTime)"
+    AllowPaging="true" 
+    PageSize="10" 
+    AllowSorting="true"
+    SelectionMode="GridSelectionMode.Single"
+    AllowRowClick="true"
+    Style="background-color:white;"
+    EmptyText="No records to display"
+    PageSizeSelectorVisible="true" 
+    PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+    OnRowClick="OnRowSelected"
+    Responsive="true"
+              RowClass="@(x => GetRowClass(x))">
+        <GridColumn TItem="Ticket" HeaderText="Ticket Number" SortString="Ticket Number" SortKeySelector="item => item.TicketNumber">
+            @context.TicketNumber
+        </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Service Name" SortString="Service Name" SortKeySelector="item => item.ServiceName">
+                @context.ServiceName
+        </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Print Time" SortString="Print Time" SortKeySelector="item => item.PrintTime">
+            @context.PrintTime
+        </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Status" SortString="Status" SortKeySelector="item => item.TicketNumber">
+            @context.Status
+        </GridColumn>
+            <GridColumn TItem="Ticket" HeaderText="Duration (min)" SortString="Duration" SortKeySelector="item => item.TicketNumber">
+            @GetDuration(context)
+        </GridColumn>
+        <GridColumn TItem="Ticket" HeaderText="Actions">
+            @* <Button Size="ButtonSize.Small" Color="ButtonColor.Primary" @onclick="() => RecallPatient(context)">Call</Button> *@
+            <Button Size="ButtonSize.Small" Color="ButtonColor.Danger" @onclick="() => ShowRemoveModal(context)">Remove</Button>
+            <Button Size="ButtonSize.Small" Color="ButtonColor.Secondary" @onclick="() => ShowReQueueModal(context)">Queue</Button>
+            @if (context.IsEmergency != true)
+            {
+                <Button Size="ButtonSize.Small" Color="ButtonColor.Warning" @onclick="() => MarkAsEmergency(context)">Mark Emergency</Button>
+            }
+        </GridColumn>
+    </Grid>
+    </div>
+}
+
+<Modal @ref="removeModal" title="Remove From Queue" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>Are you sure you want to remove patient with Ticket Number @selectedTicket?.TicketNumber from the queue?</p>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" Class="float-end" @onclick="CloseModal">Cancel</Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Danger" Class="float-end me-2" @onclick="RemovePatient">Remove</Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<Modal @ref="reQueueModal" IsVerticallyCentered="true">
+    <BodyTemplate>
+        <p>Re-queue patient with Ticket Number @selectedTicket?.TicketNumber to another service:</p>
+        <div class="mb-3">
+            <label class="form-label">Select a service:</label>
+            <InputSelect class="form-select" @bind-Value="selectedService">
+                <option value="">Select a service</option>
+                @foreach (var service in services)
+                {
+                    <option value="@service.Name">@service.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="row">
+            <div class="col-md-12 text-right">
+                <Button Type="ButtonType.Button" Color="ButtonColor.Secondary" Class="float-end" @onclick="CloseModal">Cancel</Button>
+                <Button Type="ButtonType.Button" Color="ButtonColor.Primary" Class="float-end me-2" @onclick="ReQueuePatient">Re-Queue</Button>
+            </div>
+        </div>
+    </BodyTemplate>
+</Modal>
+
+<style>
+    .emergency-row {
+        color: #dc3545 !important; /* Bootstrap danger color */
+        font-weight: bold;
+    }
+
+    .large-switch {
+        transform: scale(1.5);
+        margin-left: 6.5rem;
+    }
+
+    .selected-row {
+        background-color: #daf1de; /* Change this to your desired color */
+    }
+    /* Reduce font size for table rows */
+    .table-sm {
+        font-size: 0.875rem; /* Adjust font size */
+    }
+
+        /* Compact row padding */
+        .table-sm td, .table-sm th {
+            padding: 0.25rem; /* Reduce cell padding */
+        }
+
+    /* Optional: Reduce card spacing or other elements */
+    .p-1 {
+        padding: 0.25rem; /* Reduce padding for compact look */
+    }
+
+    /* Adjust the grid's header and row height */
+    .grid-header, .grid-row {
+        line-height: 0.4; /* Reduce line height for compact rows */
+    }
+</style>
+
+@code {
+    private Grid<Ticket> grid;
+    private List<Ticket> allTickets;
+    private List<Ticket> filteredTickets;
+    private List<Service> services;
+    private Modal removeModal;
+    private Modal reQueueModal;
+    private Ticket selectedTicket =new Ticket();
+    private string selectedService;
+    private List<ToastMessage> messages = new List<ToastMessage>();
+    private int? selectedRowId;
+    private bool isPoolingEnabled;
+
+    // Filter state
+    private string currentStatusFilter = "InQueue";
+    private string currentRoomFilter = "MyRoom";
+
+    // Counts
+    private int inQueueCount;
+    private int inServiceCount;
+    private int myRoomCount;
+    private int allRoomsCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isPoolingEnabled = await TicketService.IsPoolingEnabledAsync();
+        await LoadTickets();
+        await LoadServices();
+        TicketService.TicketQueueAlteredEvent += OnTicketQueueAltered;
+        await ApplyFilters();
+    }
+
+    private void OnRowSelected(GridRowEventArgs<Ticket> args)
+    {
+        selectedTicket = args.Item;
+        selectedRowId = args.Item.Id;
+
+    }
+
+    private async Task MarkAsEmergency(Ticket ticket)
+    {
+        await TicketService.MarkTicketAsEmergencyAsync(ticket.Id);
+        await LoadTickets();
+        ToastService.Notify(new ToastMessage
+            {
+                Type = ToastType.Warning,
+                Title = "Emergency Case",
+                Message = $"Ticket {ticket.TicketNumber} has been marked as emergency case."
+            });
+    }
+
+    private string GetRowClass(Ticket ticket)
+    {
+        var classes = new List<string>();
+
+        if (ticket == selectedTicket)
+        {
+            classes.Add("selected-row");
+        }
+
+        if (ticket.IsEmergency == true)
+        {
+            classes.Add("emergency-row");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private async Task LoadTickets()
+    {
+        allTickets = await TicketService.GetAllQueuedTicketsAsync();
+        await UpdateCounts();
+        await ApplyFilters();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task UpdateCounts()
+    {
+        inQueueCount = allTickets.Count(t => t.Status == TicketStatus.InQueue);
+        inServiceCount = allTickets.Count(t => t.Status == TicketStatus.InService);
+
+        if (!isPoolingEnabled)
+        {
+            var currentServicePoint = await TicketService.GetCurrentServicePointAsync();
+            myRoomCount = allTickets.Count(t => t.ServicePointId == currentServicePoint.Id);
+            allRoomsCount = allTickets.Count;
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        var query = allTickets.AsQueryable();
+
+        // Apply status filter
+        query = currentStatusFilter switch
+        {
+            "InQueue" => query.Where(t => t.Status == TicketStatus.InQueue),
+            "InService" => query.Where(t => t.Status == TicketStatus.InService),
+            _ => query
+        };
+
+        // Apply room filter if pooling is disabled
+        if (!isPoolingEnabled)
+        {
+            var currentServicePoint = await TicketService.GetCurrentServicePointAsync();
+            query = currentRoomFilter switch
+            {
+                "MyRoom" => query.Where(t => t.ServicePointId == currentServicePoint.Id),
+                "AllRooms" => query,
+                _ => query
+            };
+        }
+
+        filteredTickets = query.ToList();
+        StateHasChanged();
+    }
+
+    private async Task FilterByStatus(string status)
+    {
+        currentStatusFilter = status;
+        await ApplyFilters();
+    }
+
+    private async Task FilterByRoom(string room)
+    {
+        currentRoomFilter = room;
+        await ApplyFilters();
+    }
+
+
+    private async Task LoadServices()
+    {
+        services = await DbContextManager.ExecuteInContextAsync(async context =>
+        {
+            return await context.Services.OrderBy(s => s.Name).ToListAsync();
+        });
+    }
+
+    private async void OnTicketQueueAltered(object sender, EventArgs e)
+    {
+        await InvokeAsync(async () =>
+        {
+            await LoadTickets();
+            StateHasChanged();
+        });
+    }
+
+    private string GetDuration(Ticket ticket)
+    {
+        var duration = DateTime.Now - ticket.ServicePointAssignmentTime;
+        return Math.Round(duration.TotalMinutes, 0).ToString();
+    }
+
+    // private async Task RecallPatient(Ticket ticket)
+    // {
+    //     try
+    //     {
+    //         // Update ticket status
+    //         await TicketService.UpdateTicketStatusAsync(ticket.Id, TicketStatus.Called);
+
+    //         // Trigger the TicketCalledFromQueueEvent
+    //         await TicketService.CallTicketAsync(ticket.TicketNumber, ticket.ServiceName);
+
+    //         // Notify the user
+    //         ToastService.Notify(new ToastMessage
+    //             {
+    //                 Type = ToastType.Info,
+    //                 Title = "Patient Recalled",
+    //                 Message = $"Patient with Ticket Number {ticket.TicketNumber} has been recalled to {ticket.ServiceName}."
+    //             });
+
+    //         // Trigger text-to-speech
+    //         //await JS.InvokeVoidAsync("textToSpeech", $"Ticket Number {ticket.TicketNumber}, please proceed to {ticket.ServiceName}");
+
+    //         // Refresh the ticket list
+    //         await LoadTickets();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         ToastService.Notify(new ToastMessage
+    //             {
+    //                 Type = ToastType.Danger,
+    //                 Title = "Error",
+    //                 Message = $"Failed to recall patient: {ex.Message}"
+    //             });
+    //     }
+    // }
+
+    private async Task ShowRemoveModal(Ticket ticket)
+    {
+        selectedTicket = ticket;
+        await removeModal.ShowAsync();
+    }
+
+    private async Task ShowReQueueModal(Ticket ticket)
+    {
+        selectedTicket = ticket;
+        await reQueueModal.ShowAsync();
+    }
+
+    private async Task CloseModal()
+    {
+        await removeModal.HideAsync();
+        await reQueueModal.HideAsync();
+    }
+
+    private async Task RemovePatient()
+    {
+        if (selectedTicket != null)
+        {
+            await TicketService.RemoveTicketFromQueueAsync(selectedTicket);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "Patient Removed",
+                    Message = $"Patient with Ticket Number {selectedTicket.TicketNumber} has been removed from the queue."
+                });
+            await LoadTickets();
+        }
+        await CloseModal();
+    }
+
+    private async Task ReQueuePatient()
+    {
+        if (selectedTicket != null && !string.IsNullOrEmpty(selectedService))
+        {
+            await TicketService.TransferTicket(selectedTicket.Id, selectedService);
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Success,
+                    Title = "Patient Re-Queued",
+                    Message = $"Patient with Ticket Number {selectedTicket.TicketNumber} has been re-queued to {selectedService}."
+                });
+            await LoadTickets();
+        }
+        else
+        {
+            ToastService.Notify(new ToastMessage
+                {
+                    Type = ToastType.Warning,
+                    Title = "Re-Queue Failed",
+                    Message = "Please select a service before re-queuing."
+                });
+        }
+        await CloseModal();
+    }
+
+    public void Dispose()
+    {
+        TicketService.TicketQueueAlteredEvent -= OnTicketQueueAltered;
+    }
+}

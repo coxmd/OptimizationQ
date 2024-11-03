@@ -1,0 +1,148 @@
+@using System.Linq
+@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@using Humanizer
+@using FastReport
+@using FastReport.Export.PdfSimple
+@using FastReport.Export.Pdf;
+
+@namespace QueueManagementSystem.MVC.Components
+
+@inject IAnalyticsService AnalyticsService
+@inject IReportService ReportService
+@inject IJSRuntime JS
+
+
+@if (totalServedTickets > 0)
+{
+    <div class="row mx-auto">
+        <div class="col-sm-4">
+            <Card Class="card-service"  TextAlignment="Alignment.Center">
+                <CardBody>
+                    <CardTitle Class="card-title">Total Served Tickets</CardTitle>
+                    <CardText>@totalServedTickets</CardText>
+                </CardBody>
+            </Card>
+        </div>
+
+        <div class="col-sm-4">
+            <Card Class="card-service"  TextAlignment="Alignment.Center" >
+                <CardBody >
+                    <CardTitle>Most Offered Service</CardTitle>
+                    <CardText>@($"{mostOfferedService.Name} {@mostOfferedServicePercentage}%")</CardText>
+                </CardBody>
+            </Card>
+        </div>
+
+        <div class="col-sm-4">
+            <Card Class="card-service" TextAlignment="Alignment.Center" >
+                <CardBody>
+                    <CardTitle>Least Offered Service</CardTitle>
+                    <CardText>@($"{leastOfferedService.Name} {@leastOfferedServicePercentage}%")</CardText>
+                </CardBody>
+            </Card>
+        </div>
+    </div>
+
+    <div>
+       
+        <div class="text-center m-2">
+            <h2 class="page-title">Service Statistics</h2><br />
+
+        </div>
+    </div>
+    <div class="card" style="padding:20px;background-color:#E6F2F2;color:#043927">
+        <Grid @ref="statsGrid" TItem="ServiceStat" Class="table table-bordered table-light table-sm compact-grid" Data="serviceStats"
+              Style="background-color:white;"
+              AllowPaging="true"
+              PageSize="10"
+              SelectionMode="GridSelectionMode.Single"
+              PageSizeSelectorVisible="true"
+              PageSizeSelectorItems="@(new int[] { 5,10,20 })"
+              AllowSorting="true"
+              AllowRowClick="true"
+              EmptyText="No records to display">
+            <GridColumn TItem="ServiceStat" HeaderText="Service Name" SortString="Active" SortKeySelector="item => item.Name">
+            @context.Name
+        </GridColumn>
+            <GridColumn TItem="ServiceStat" HeaderText="Total Times Offered" SortString="Active" SortKeySelector="item => item.TotalOfferings">
+            @context.TotalOfferings
+        </GridColumn>
+            <GridColumn TItem="ServiceStat" HeaderText="Average Waiting Time" SortString="Active" SortKeySelector="item => item.AverageWaitingTime">
+            @context.AverageWaitingTime.Humanize()
+        </GridColumn>
+            <GridColumn TItem="ServiceStat" HeaderText="Average Service Time" SortString="Active" SortKeySelector="item => item.AverageServiceTime">
+            @context.AverageServiceTime.Humanize()
+        </GridColumn>
+
+    </Grid>
+    </div>
+    <style>
+        .page-title
+        {
+            color: #004d4d;
+            font-weight: bold;
+            font-size: 2rem;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            
+        }
+    .card-service {
+        background-color: #FFFFFF;
+        color: #006666;
+        border-radius: 12px;
+        padding: 10px;
+        margin-top:10px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+        .card-title {
+            color: #006666;
+            font-size: 1.0rem;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(0, 102, 102, 0.2);
+        }
+     </style>
+}
+
+<script>
+    downloadFileFromStream = async (fileName, contentStreamReference) => {
+        const arrayBuffer = await contentStreamReference.arrayBuffer();
+        const blob = new Blob([arrayBuffer]);
+        const url = URL.createObjectURL(blob);
+        const anchorElement = document.createElement('a');
+        anchorElement.href = url;
+        anchorElement.download = fileName ?? '';
+        anchorElement.click();
+        anchorElement.remove();
+        URL.revokeObjectURL(url);
+    };
+</script>
+
+@code {
+    private ServiceStat? mostOfferedService;
+    private int? mostOfferedServicePercentage;
+    private ServiceStat? leastOfferedService;
+    private int? leastOfferedServicePercentage;
+    private int totalServedTickets;
+    private List<ServiceStat>? serviceStats;
+    private DateTime? serviceDate;
+    private DateTime? serviceStartDate;
+    private DateTime? serviceEndDate;
+    private Grid<ServiceStat> statsGrid;
+
+  
+
+    protected override async Task OnInitializedAsync()
+    {
+        serviceStats = await AnalyticsService.GetServicesStatsAsync();
+        totalServedTickets = serviceStats.Sum(ss => ss.TotalOfferings);
+        mostOfferedService = serviceStats.MaxBy(ss => ss.TotalOfferings);
+        leastOfferedService = serviceStats.MinBy(ss => ss.TotalOfferings);
+        mostOfferedServicePercentage = 0;
+        //= 100 * mostOfferedService!.TotalOfferings / totalServedTickets;
+        leastOfferedServicePercentage = 0;
+        //100 * leastOfferedService!.TotalOfferings / totalServedTickets;
+    }
+}

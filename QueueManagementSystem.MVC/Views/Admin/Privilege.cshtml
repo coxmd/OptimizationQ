@@ -1,0 +1,18 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Configure Privilege";
+}
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+
+    <div>
+        @(await Html.RenderComponentAsync<Privileges>(RenderMode.ServerPrerendered))
+    </div>
+</body>
+</html>
+
+

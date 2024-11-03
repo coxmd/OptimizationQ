@@ -1,0 +1,100 @@
+﻿@using QueueManagementSystem.MVC.Models
+@using QueueManagementSystem.MVC.Services
+@inject NotificationService notificationService
+<div class="position-relative" >
+    <!-- Notification Bell Icon -->
+    <button class="btn btn-default" @onclick="ToggleNotificationMenu" style="border: none; cursor: pointer;color:white">
+       
+        <i class="fas fa-bell" style="font-size: 1.5rem;"></i>
+        @if (Messages.Count > 0)
+        {
+            <span class="badge bg-danger position-absolute top-50 start-50 translate-middle" style="font-size: 0.4rem;">@Messages.Count(p => p.IsRead == false)</span>
+        }
+    </button>
+
+    <!-- Notification Menu -->
+    @if (showNotificationMenu)
+    {
+        <div class="dropdown-menu show" style="position: absolute; top:40px; right: 0; background-color: whitesmoke; width: 450px; max-height: 155px; overflow-y: auto;">
+            @if (Messages.Count == 0)
+            {
+                <div class="dropdown-item">No new notifications</div>
+            }
+            else
+            {
+                @foreach (var notification in Messages)
+                {
+                    
+                        <div class="card" style="width: 100%; background-color:@(notification.IsRead ? "white" : "azure"); border: 2px solid lightgray;">
+                            <div class="card-body">
+                                @if (!notification.IsRead)
+                                {
+                                <button class="btn btn-success btn-sm float-end" disabled="@IsBusy" @onclick="@(() => MarkAsRead(notification))">
+                                    @if (IsBusy)
+                                    {
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                        <span class="visually-hidden">processing...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Mark as Read</span>
+                                    }
+                                    </button>
+                                }
+                                <h6 class="card-title">@notification.Title</h6>
+                                <p class="card-text">@notification.Message</p>
+                                <small class="text-muted">@notification.Date.ToString("dd/MM/yyyy HH:mm tt")</small>
+                            </div>
+                        </div>
+                    
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+
+    List<NotificationMessage> Messages = new List<NotificationMessage>();
+    bool IsBusy = false;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+
+            await FetchNotifications();
+        }
+
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+
+
+    bool showNotificationMenu = false;
+
+    void ToggleNotificationMenu()
+    {
+        showNotificationMenu = !showNotificationMenu; 
+    }
+    public async Task FetchNotifications()
+    {
+        var messageList = await notificationService.FetchNotifications();
+        Messages = messageList;
+        StateHasChanged();
+    }
+    private async Task MarkAsRead(NotificationMessage notification)
+    {
+        IsBusy = true;
+        var success = await notificationService.MarkNotificationAsRead(notification.TicketNo!);
+        if (success)
+        {
+            
+            await FetchNotifications();
+        }
+        IsBusy = false;
+        
+
+    }
+    
+    
+}

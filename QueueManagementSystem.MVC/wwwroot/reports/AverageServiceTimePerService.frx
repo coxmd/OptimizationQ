@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report ScriptLanguage="CSharp" UseFileCache="true" ReportInfo.Created="03/09/2023 10:19:50" ReportInfo.Modified="11/03/2024 17:08:00" ReportInfo.CreatorVersion="2024.1.2.0">
+  <ScriptText>using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Windows.Forms;
+using System.Drawing;
+using System.Data;
+using FastReport;
+using FastReport.Data;
+using FastReport.Dialog;
+using FastReport.Barcode;
+using FastReport.Table;
+using FastReport.Utils;
+
+namespace FastReport
+{
+  public class ReportScript
+  {
+    private void ReportTitle1_BeforePrint(object sender, EventArgs e)
+    {
+      var now = DateTime.Now;
+      try
+      {
+        TimeZoneInfo zoneInfo = TimeZoneInfo.FindSystemTimeZoneById(Report.GetParameterValue(&quot;Tz&quot;).ToString());
+                                                                                                 
+        now = TimeZoneInfo.ConvertTimeFromUtc(now.ToUniversalTime(), zoneInfo);
+      }
+      catch (Exception)
+      {                   
+      }
+      
+      txtPrintedOn.Text = now.ToString(&quot;dd-MMM-yyyy hh:mm tt&quot;);
+    }
+    
+    public int No = 1;
+    private void Data1_BeforePrint(object sender, EventArgs e)
+    {
+      txtNo.Text = No.ToString();
+      No++;
+    }
+  }
+}
+</ScriptText>
+  <Styles>
+    <Style Name="EvenRows" Font="Arial, 10pt"/>
+  </Styles>
+  <Dictionary>
+    <PostgresDataConnection Name="Connection">
+      <TableDataSource Name="Table1" Alias="WaitingTime" DataType="System.Int32" Enabled="true" SelectCommand="SELECT &#13;&#10;    s.&quot;Name&quot; as &quot;ServiceName&quot;,&#13;&#10;    COUNT(t.&quot;Id&quot;) as &quot;TotalTickets&quot;,&#13;&#10;    ROUND(AVG(EXTRACT(EPOCH FROM (t.&quot;FinishTime&quot; - t.&quot;ServicePointAssignmentTime&quot;))/60), 0) as &quot;AverageServiceMinutes&quot;&#13;&#10;FROM &#13;&#10;    &quot;Service&quot; s&#13;&#10;    LEFT JOIN &quot;ServedTicket&quot; t ON s.&quot;Id&quot; = t.&quot;ServiceId&quot;&#13;&#10;WHERE &#13;&#10;    t.&quot;PrintTime&quot;::timestamptz AT TIME ZONE @tz &gt;= to_timestamp(@datefrom, 'YYYY-MM-dd')&#13;&#10;    AND t.&quot;PrintTime&quot;::timestamptz AT TIME ZONE @tz &lt; to_timestamp(@dateto, 'YYYY-MM-dd')&#13;&#10;GROUP BY &#13;&#10;    s.&quot;Name&quot;&#13;&#10;ORDER BY &#13;&#10;    &quot;AverageServiceMinutes&quot; DESC;">
+        <Column Name="TotalTickets" DataType="System.Int64"/>
+        <Column Name="ServiceName" DataType="System.String"/>
+        <Column Name="AverageServiceMinutes" DataType="System.Decimal"/>
+        <CommandParameter Name="tz" DataType="22" Expression="[Tz]" DefaultValue="EAT"/>
+        <CommandParameter Name="datefrom" DataType="22" Expression="[DateFrom]" DefaultValue="2024-08-01"/>
+        <CommandParameter Name="dateto" DataType="22" Expression="[DateTo]" DefaultValue="2024-10-30"/>
+      </TableDataSource>
+    </PostgresDataConnection>
+    <Parameter Name="Tz" DataType="System.String" AsString=""/>
+    <Parameter Name="DateFrom" DataType="System.String" AsString=""/>
+    <Parameter Name="DateTo" DataType="System.String" AsString=""/>
+  </Dictionary>
+  <ReportPage Name="Page1" Landscape="true" PaperWidth="297" PaperHeight="210" Watermark.Font="Arial, 60pt">
+    <ReportTitleBand Name="ReportTitle1" Width="1047.06" Height="75.6">
+      <TextObject Name="Text1" Left="9.45" Top="9.45" Width="1039.5" Height="28.35" Fill.Color="LightSkyBlue" Text="Average Service Time Per Service Type" HorzAlign="Center" VertAlign="Center" Font="Arial, 11pt, style=Bold"/>
+      <TextObject Name="Text33" Left="699.3" Top="56.7" Width="94.5" Height="18.9" Text="Printed On:" HorzAlign="Right" Font="Arial, 10pt, style=Bold"/>
+      <TextObject Name="txtPrintedOn" Left="793.8" Top="56.7" Width="236.25" Height="18.9" Font="Arial, 10pt, style=Bold"/>
+    </ReportTitleBand>
+    <PageHeaderBand Name="PageHeader1" Top="78.27" Width="1047.06" Height="18.9">
+      <TextObject Name="Text11" Left="56.7" Width="207.9" Height="18.9" Text="Service Name" Font="Times New Roman, 12pt, style=Bold"/>
+      <TextObject Name="Text38" Left="453.6" Width="236.25" Height="18.9" Text="Average Service Time" Font="Arial, 10pt, style=Bold"/>
+      <TextObject Name="Text40" Left="9.45" Width="56.7" Height="18.9" Text="No" Font="Arial, 10pt, style=Bold"/>
+    </PageHeaderBand>
+    <DataBand Name="Data1" Top="99.83" Width="1047.06" Height="21.56" Fill.Color="112, 173, 216, 230" EvenStyle="EvenRows" DataSource="Table1">
+      <TextObject Name="Text13" Left="56.7" Width="207.9" Height="18.9" Text="[WaitingTime.ServiceName]" Font="Arial, 10pt"/>
+      <TextObject Name="Text39" Left="453.6" Width="236.25" Height="18.9" Text="[WaitingTime.AverageServiceMinutes]Minutes" Font="Arial, 10pt"/>
+      <TextObject Name="txtNo" Left="9.45" Width="37.8" Height="18.9" CanGrow="true" Font="Arial, 9pt"/>
+    </DataBand>
+    <PageFooterBand Name="PageFooter1" Top="124.06" Width="1047.06" Height="28.35">
+      <TextObject Name="Text9" Left="614.25" Top="9.45" Width="94.5" Height="18.9" Text="[Page]" Font="Arial, 10pt"/>
+    </PageFooterBand>
+  </ReportPage>
+</Report>

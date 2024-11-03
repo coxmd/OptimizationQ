@@ -1,0 +1,9 @@
+﻿@model string
+@using QueueManagementSystem.MVC.Components
+
+@{
+    ViewData["Title"] = "Ticket Tracking";
+    Layout = "_LayoutNoNav";
+}
+
+<component type="typeof(QueueManagementSystem.MVC.Components.TicketTrackingPage)" render-mode="ServerPrerendered"  param-TicketNumber="@Model" />

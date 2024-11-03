@@ -1,0 +1,17 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Configure SMTP";
+}
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+
+    <div>
+        @(await Html.RenderComponentAsync<ConfigureSmtp>(RenderMode.ServerPrerendered))
+    </div>
+</body>
+</html>
+

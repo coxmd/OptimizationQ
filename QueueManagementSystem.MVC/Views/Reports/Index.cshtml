@@ -1,0 +1,73 @@
+﻿@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    Layout = "_Layout";
+}
+@{
+    ViewData["Title"] = "Reports";
+    var reportTypes = new List<SelectListItem>
+    {
+        new SelectListItem { Value = "", Text = "Select a report type" },
+        new SelectListItem { Value = "AverageWaitingTimePerService", Text = "Average Waiting Time PerService" },
+        new SelectListItem { Value = "AverageWaitingTimePerServicePoint", Text = "Average Waiting Time Per Service Point" },
+        new SelectListItem { Value = "AverageServiceTimePerService", Text = "Average Service Time Per Service" },
+        new SelectListItem { Value = "AverageServiceTimePerServicePoint", Text = "Average Service Time Per Service Point" },
+        new SelectListItem { Value = "AverageServiceTimePerServiceProvider", Text = "Average Service Time Per Service Provider" },
+        new SelectListItem { Value = "CustomersServedPerService", Text = "Total Customers Served Per Service" },
+        new SelectListItem { Value = "CustomersServedPerServicePoint", Text = "Total Customers Served Per Service Point" },
+        new SelectListItem { Value = "QueueDetailedReport", Text = "Queue Detailed Report" },
+        new SelectListItem { Value = "ServiceProviderEfficiencyReport", Text = "Service Provider Efficiency Report" },
+        new SelectListItem { Value = "CustomerReturnRateAnalysis", Text = "Customer Return Rate Analysis" },
+        new SelectListItem { Value = "ServiceTimeTrendAnalysis", Text = "Service Time Trend Analysis" },
+        new SelectListItem { Value = "ServicePointLoadDistribution", Text = "Service Point Load Distribution" },
+        new SelectListItem { Value = "DailyPerformanceMetrics", Text = "Daily Performance Metrics" },
+        new SelectListItem { Value = "ServicePointUtilization", Text = "Service Point Utilization" },
+    };
+}
+
+<!DOCTYPE html>
+<html>
+<body>
+    <div class="container mx-auto p-4">
+        <h2 class="text-2xl font-bold mb-4">Reports</h2>
+        <div class="card" style="padding:20px;background-color:#E6F2F2">
+            <div class="card-body">
+                <form method="get" autocomplete="off">
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <label for="reportType" class="form-label">Select Report:</label>
+                            <select id="reportType" name="reportType" class="form-select" required>
+                                @foreach (var report in reportTypes)
+                                {
+                                    <option value="@report.Value">@report.Text</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="startDate" class="form-label">From:</label>
+                            <input type="date" id="startDate" name="startDate" class="form-control" required value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-3">
+                            <label for="endDate" class="form-label">To:</label>
+                            <input type="date" id="endDate" name="endDate" class="form-control" required value="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="submit" class="btn btn-success">View</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        @if (ViewBag.ShowReport == true)
+        {
+            <div class="card mt-4" style="padding:20px;background-color:#E6F2F2">
+                <div class="card-body">
+                    <div class="overflow-auto" style="max-height: 500px;">
+                        @await ViewBag.WebReport.Render()
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</body>
+</html>

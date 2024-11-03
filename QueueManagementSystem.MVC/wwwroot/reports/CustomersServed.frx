@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report ScriptLanguage="CSharp" UseFileCache="true" ReportInfo.Created="03/09/2023 10:19:50" ReportInfo.Modified="11/03/2024 17:35:40" ReportInfo.CreatorVersion="2024.1.2.0">
+  <ScriptText>using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Windows.Forms;
+using System.Drawing;
+using System.Data;
+using FastReport;
+using FastReport.Data;
+using FastReport.Dialog;
+using FastReport.Barcode;
+using FastReport.Table;
+using FastReport.Utils;
+
+namespace FastReport
+{
+  public class ReportScript
+  {
+    private void ReportTitle1_BeforePrint(object sender, EventArgs e)
+    {
+      var now = DateTime.Now;
+      try
+      {
+        TimeZoneInfo zoneInfo = TimeZoneInfo.FindSystemTimeZoneById(Report.GetParameterValue(&quot;Tz&quot;).ToString());
+                                                                                                 
+        now = TimeZoneInfo.ConvertTimeFromUtc(now.ToUniversalTime(), zoneInfo);
+      }
+      catch (Exception)
+      {                   
+      }
+      
+      txtPrintedOn.Text = now.ToString(&quot;dd-MMM-yyyy hh:mm tt&quot;);
+    }
+    
+    public int No = 1;
+    private void Data1_BeforePrint(object sender, EventArgs e)
+    {
+      txtNo.Text = No.ToString();
+      No++;
+    }
+  }
+}
+</ScriptText>
+  <Styles>
+    <Style Name="EvenRows" Font="Arial, 10pt"/>
+  </Styles>
+  <Dictionary>
+    <PostgresDataConnection Name="Connection" ConnectionString="rijcmlqwOD/bEsQFbrXT9H9u0hdYcsAxnorcvsd0DOMXmQRVk1Elr+Ob90VuGMozAgUeOsdnU1cm07i7BED1iN532HWz9a/wPPmfaMR3hfgAX3Zr9t4UQwuoY7UJXG9uNt6TE3We4+2s6IfyQNrrK3PACoR7iBn1w4H0L7KOQAenKyld/SvRFSnuw7nLU40g5QwQ5pPwZ1TbPcEv0gDCi2wVAr6DFWj7/yQAOb89YFnnn3CqQ8=">
+      <TableDataSource Name="Table" Alias="TotalCustomers" DataType="System.Int32" Enabled="true" SelectCommand="SELECT &#13;&#10;    &quot;ServicePoint&quot;.&quot;Name&quot; AS &quot;ServicePointName&quot;,&#13;&#10;    &quot;ServiceProvider&quot;.&quot;FullNames&quot; AS &quot;ServiceProviderName&quot;,&#13;&#10;    COUNT(&quot;ServedTicket&quot;.&quot;TicketNumber&quot;) AS &quot;TotalCustomersServed&quot;,&#13;&#10;    MIN(&quot;ServedTicket&quot;.&quot;PrintTime&quot;) AS &quot;FirstTicketTime&quot;,&#13;&#10;    MAX(&quot;ServedTicket&quot;.&quot;FinishTime&quot;) AS &quot;LastTicketTime&quot;&#13;&#10;FROM &#13;&#10;    &quot;ServedTicket&quot;&#13;&#10;    INNER JOIN &quot;Service&quot; ON &quot;ServedTicket&quot;.&quot;ServiceId&quot; = &quot;Service&quot;.&quot;Id&quot;&#13;&#10;    INNER JOIN &quot;ServicePoint&quot; ON &quot;ServicePoint&quot;.&quot;ServiceId&quot; = &quot;Service&quot;.&quot;Id&quot;&#13;&#10;    INNER JOIN &quot;ServiceProvider&quot; ON &quot;ServiceProvider&quot;.&quot;ServicePointId&quot; = &quot;ServicePoint&quot;.&quot;Id&quot;&#13;&#10;WHERE &#13;&#10;    &quot;ServedTicket&quot;.&quot;FinishTime&quot; IS NOT NULL&#13;&#10;    AND &quot;ServedTicket&quot;.&quot;PrintTime&quot;::timestamptz AT TIME ZONE @tz &gt;= to_timestamp(@datefrom, 'YYYY-MM-dd')&#13;&#10;    AND &quot;ServedTicket&quot;.&quot;PrintTime&quot;::timestamptz AT TIME ZONE @tz &lt; to_timestamp(@dateto, 'YYYY-MM-dd')&#13;&#10;GROUP BY &#13;&#10;    &quot;ServicePoint&quot;.&quot;Name&quot;, &quot;ServiceProvider&quot;.&quot;FullNames&quot;&#13;&#10;ORDER BY &#13;&#10;    &quot;TotalCustomersServed&quot; DESC, &quot;ServicePointName&quot;, &quot;ServiceProviderName&quot;">
+        <Column Name="ServiceProviderName" DataType="System.String"/>
+        <Column Name="ServicePointName" DataType="System.String"/>
+        <Column Name="TotalCustomersServed" DataType="System.Int64"/>
+        <Column Name="FirstTicketTime" DataType="System.DateTime"/>
+        <Column Name="LastTicketTime" DataType="System.DateTime"/>
+        <CommandParameter Name="tz" DataType="22" Expression="[Tz]" DefaultValue="EAT"/>
+        <CommandParameter Name="datefrom" DataType="22" Expression="[DateFrom]" DefaultValue="2024-01-01"/>
+        <CommandParameter Name="dateto" DataType="22" Expression="[DateTo]" DefaultValue="2024-09-30"/>
+      </TableDataSource>
+    </PostgresDataConnection>
+    <Parameter Name="Tz" DataType="System.String" AsString=""/>
+    <Parameter Name="DateFrom" DataType="System.String" AsString=""/>
+    <Parameter Name="DateTo" DataType="System.String" AsString=""/>
+  </Dictionary>
+  <ReportPage Name="Page1" Landscape="true" PaperWidth="297" PaperHeight="210" Watermark.Font="Arial, 60pt">
+    <ReportTitleBand Name="ReportTitle1" Width="1047.06" Height="75.6">
+      <TextObject Name="Text1" Left="9.45" Top="9.45" Width="1039.5" Height="28.35" Fill.Color="LightSkyBlue" Text="Customers Served" HorzAlign="Center" VertAlign="Center" Font="Arial, 11pt, style=Bold"/>
+      <TextObject Name="Text33" Left="699.3" Top="56.7" Width="94.5" Height="18.9" Text="Printed On:" HorzAlign="Right" Font="Arial, 10pt, style=Bold"/>
+      <TextObject Name="txtPrintedOn" Left="793.8" Top="56.7" Width="236.25" Height="18.9" Font="Arial, 10pt, style=Bold"/>
+    </ReportTitleBand>
+    <PageHeaderBand Name="PageHeader1" Top="78.27" Width="1047.06" Height="18.9">
+      <TextObject Name="Text12" Left="538.65" Width="255.15" Height="18.9" Text="Number of Customers Served" HorzAlign="Right" Font="Times New Roman, 12pt, style=Bold"/>
+      <TextObject Name="Text11" Left="311.85" Width="207.9" Height="18.9" Text="Service Provider" Font="Times New Roman, 12pt, style=Bold"/>
+      <TextObject Name="Text34" Left="85.05" Width="217.35" Height="18.9" Text="Service Point" Font="Arial, 10pt, style=Bold"/>
+      <TextObject Name="Text36" Left="9.45" Width="66.15" Height="18.9" Text="No" Font="Arial, 10pt, style=Bold"/>
+    </PageHeaderBand>
+    <DataBand Name="Data1" Top="99.83" Width="1047.06" Height="18.9" Fill.Color="112, 173, 216, 230" EvenStyle="EvenRows" DataSource="Table">
+      <TextObject Name="Text13" Left="311.85" Width="207.9" Height="18.9" Text="[TotalCustomers.ServiceProviderName]" Font="Arial, 10pt"/>
+      <TextObject Name="Text14" Left="595.35" Width="198.45" Height="18.9" Text="[TotalCustomers.TotalCustomersServed]" HorzAlign="Right" Font="Arial, 10pt"/>
+      <TextObject Name="Text35" Left="85.05" Width="245.7" Height="18.9" Text="[TotalCustomers.ServicePointName]" Font="Arial, 10pt"/>
+      <TextObject Name="txtNo" Left="9.45" Width="75.6" Height="18.9" Font="Arial, 10pt, style=Bold"/>
+    </DataBand>
+    <PageFooterBand Name="PageFooter1" Top="121.4" Width="1047.06" Height="28.35">
+      <TextObject Name="Text9" Left="614.25" Top="9.45" Width="94.5" Height="18.9" Text="[Page]" Font="Arial, 10pt"/>
+    </PageFooterBand>
+  </ReportPage>
+</Report>

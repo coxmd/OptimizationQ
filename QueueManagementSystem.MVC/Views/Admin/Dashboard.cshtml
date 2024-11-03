@@ -1,0 +1,195 @@
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="text-center">
+    <h1 class="dashboard-title">Welcome to QMS Admin Dashboard</h1>
+    <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 g-4">
+        <!-- Card 1: Configure Services -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureServices", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-cog fa-2x mb-3"></i>
+                        <h5 class="card-title">Services</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 2: Configure Service Categories -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureServiceCategories", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-cog fa-2x mb-3"></i>
+                        <h5 class="card-title">Service Categories</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 3: Configure Service Providers -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureServiceProviders", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-briefcase fa-2x mb-3"></i>
+                        <h5 class="card-title">System Users</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 4: Configure Service Points -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureServicePoints", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-map-marker-alt fa-2x mb-3"></i>
+                        <h5 class="card-title">Service Points</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 5: Analytical Reports -->
+        <div class="col">
+            <a href="@Url.Action("ReportType", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-file-alt fa-2x mb-3"></i>
+                        <h5 class="card-title">Reports</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 6: SMTP Configuration -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureSmtp", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-envelope fa-2x mb-3"></i>
+                        <h5 class="card-title">SMTP Settings</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 7: SMS Configuration -->
+        <div class="col">
+            <a href="@Url.Action("ConfigureSms", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-envelope fa-2x mb-3"></i>
+                        <h5 class="card-title">SMS Settings</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 8: Advert Management -->
+        <div class="col">
+            <a href="@Url.Action("ManageAdverts", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-film fa-2x mb-3"></i>
+                        <h5 class="card-title">Manage Adverts</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 9: Configuration Management -->
+        <div class="col">
+            <a href="@Url.Action("ConfigurationPage", "Configuration")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-film fa-2x mb-3"></i>
+                        <h5 class="card-title">Configuration</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <!-- Card 10: System Users -->
+        <div class="col">
+            <a href="@Url.Action("UserRole", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-film fa-2x mb-3"></i>
+                        <h5 class="card-title">User Roles</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <!-- Card 11: Privileges  -->
+        <div class="col">
+            <a href="@Url.Action("Privilege", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-film fa-2x mb-3"></i>
+                        <h5 class="card-title">Privileges</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <!-- Card 11: Privileges  -->
+        <div class="col">
+            <a href="@Url.Action("CompanyInformation", "Admin")" class="text-decoration-none">
+                <div class="dashboard-card text-center">
+                    <div class="card-body">
+                        <i class="fas fa-film fa-2x mb-3"></i>
+                        <h5 class="card-title">Company Information</h5>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .dashboard-title {
+        color: #004d4d;
+        font-weight: bold;
+        font-size: 2rem;
+        padding: 15px 0;
+        margin-bottom: 30px;
+        border-bottom: 2px solid rgba(0, 102, 102, 0.2);
+    }
+
+    .dashboard-card {
+        background-color: #FFFFFF;
+        color: #006666;
+        border-radius: 12px;
+        padding: 20px;
+        height: 100%;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+        .dashboard-card:hover {
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            transform: translateY(-5px);
+        }
+
+        .dashboard-card i {
+            color: #00A3A3;
+        }
+
+        .dashboard-card h5 {
+            font-weight: 600;
+            margin-top: 10px;
+        }
+
+    @@media (max-width: 767px) {
+        .dashboard-title {
+            font-size: 1.5rem;
+        }
+
+        .dashboard-card {
+            padding: 15px;
+        }
+    }
+</style>

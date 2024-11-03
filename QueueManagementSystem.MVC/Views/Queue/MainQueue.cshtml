@@ -1,0 +1,8 @@
+﻿@using QueueManagementSystem.MVC.Components
+@{
+    ViewData["Title"] = "Main Queue";
+}
+
+<div>
+    @(await Html.RenderComponentAsync<MainQueue>(RenderMode.ServerPrerendered))
+</div>
