@@ -107,6 +107,29 @@ namespace QueueManagementSystem.MVC.Data
 
         }
 
+        // Compiled queries for optimization
+        public static readonly Func<QueueManagementSystemContext, string, Task<Service?>> GetServiceByNameAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string serviceName) =>
+                context.Services.FirstOrDefault(s => s.Name == serviceName));
 
+        public static readonly Func<QueueManagementSystemContext, string, Task<ServicePoint?>> GetServicePointByNameAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string servicePointName) =>
+                context.ServicePoints.FirstOrDefault(sp => sp.Name == servicePointName));
+
+        public static readonly Func<QueueManagementSystemContext, string, Task<ServiceCategory?>> GetServiceCategoryByNameAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string serviceCategoryName) =>
+                context.ServiceCategories.FirstOrDefault(sc => sc.Name == serviceCategoryName));
+
+        public static readonly Func<QueueManagementSystemContext, string, Task<ServiceProvider?>> GetServiceProviderByEmailAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string email) =>
+                context.ServiceProviders.FirstOrDefault(sp => sp.Email == email));
+
+        public static readonly Func<QueueManagementSystemContext, string, Task<Ticket?>> GetTicketByNumberAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string ticketNumber) =>
+                context.QueuedTickets.FirstOrDefault(t => t.TicketNumber == ticketNumber));
+
+        public static readonly Func<QueueManagementSystemContext, string, Task<Configuration?>> GetConfigurationByNameAsync =
+            EF.CompileAsyncQuery((QueueManagementSystemContext context, string configName) =>
+                context.Configurations.FirstOrDefault(c => c.ConfigurationName == configName));
     }
 }

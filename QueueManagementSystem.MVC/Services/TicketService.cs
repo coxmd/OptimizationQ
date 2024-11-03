@@ -57,7 +57,7 @@ public class TicketService : ITicketService
     // Modify the TransferTicket method to reset the ServicePointAssignmentTime:
     public async Task TransferTicket(int ticketId, string newServiceName)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
         var ticket = await context.QueuedTickets
             .FirstOrDefaultAsync(t => t.Id == ticketId);
 
@@ -89,7 +89,7 @@ public class TicketService : ITicketService
 
     public async Task<Ticket> GetActiveTicketAsync(int servicePointId, string serviceProviderId)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         // Build the base query
         var query = context.QueuedTickets
@@ -143,25 +143,6 @@ public class TicketService : ITicketService
             t.Status == "In-Service");
     }
 
-    //public async Task CallTicketAsync(string ticketNumber, string calledServicePointName)
-    //{
-    //    await using var context = await _dbFactory.CreateDbContextAsync();
-    //    var ticket = await context.QueuedTickets.FirstOrDefaultAsync(t => t.TicketNumber == ticketNumber);
-
-    //    if (ticket != null)
-    //    {
-    //        ticket.Status = TicketStatus.Called;
-    //        await context.SaveChangesAsync();
-
-    //        TicketCalledFromQueueEvent?.Invoke(this, (ticket.TicketNumber, calledServicePointName));
-    //        TicketQueueAlteredEvent?.Invoke(this, EventArgs.Empty);
-    //    }
-    //    else
-    //    {
-    //        throw new ArgumentException($"Ticket with number {ticketNumber} not found.");
-    //    }
-    //}
-
     public async Task CallTicketAsync(string ticketNumber, string calledServicePointName, int servicePointId, string? serviceProviderId = null)
     {
         await using var context = await _dbFactory.CreateDbContextAsync();
@@ -191,25 +172,6 @@ public class TicketService : ITicketService
         TicketQueueAlteredEvent?.Invoke(this, EventArgs.Empty);
     }
 
-    //public async Task CallTicketAsync(string ticketNumber, string calledServicePointName)
-    //{
-    //    await using var context = await _dbFactory.CreateDbContextAsync();
-    //    var ticket = await context.QueuedTickets.FirstOrDefaultAsync(t => t.TicketNumber == ticketNumber);
-
-    //    if (ticket != null)
-    //    {
-    //        ticket.Status = TicketStatus.Called;
-    //        await context.SaveChangesAsync();
-
-    //        TicketCalledFromQueueEvent?.Invoke(this, (ticket.TicketNumber, calledServicePointName));
-    //        TicketQueueAlteredEvent?.Invoke(this, EventArgs.Empty);
-    //    }
-    //    else
-    //    {
-    //        throw new ArgumentException($"Ticket with number {ticketNumber} not found.");
-    //    }
-    //}
-
     public async Task<Ticket?> GetTicketFromQueueAsync(string serviceName, string calledServicePointName)
     {
         await using var context = await _dbFactory.CreateDbContextAsync();
@@ -231,7 +193,7 @@ public class TicketService : ITicketService
 
     public async Task MoveTicketToEndOfQueueAsync(int ticketId)
     {
-        using var context = await _dbFactory.CreateDbContextAsync();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         // Get the ticket to move
         var ticket = await context.QueuedTickets
@@ -293,7 +255,7 @@ public class TicketService : ITicketService
 
     public async Task MoveTicketToEndOfServicePointQueueAsync(int ticketId, int servicePointId)
     {
-        using var context = await _dbFactory.CreateDbContextAsync();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         // Get the ticket to move
         var ticket = await context.QueuedTickets
@@ -472,20 +434,9 @@ public class TicketService : ITicketService
         TicketQueueAlteredEvent?.Invoke(this, EventArgs.Empty);
     }
 
-    //public async Task UpdateServicePointStatusAsync(int servicePointId, string status)
-    //{
-    //    using var context = _dbFactory.CreateDbContext();
-    //    var servicePoint = await context.ServicePoints.FindAsync(servicePointId);
-    //    if (servicePoint != null)
-    //    {
-    //        servicePoint.Status = status;
-    //        await context.SaveChangesAsync();
-    //    }
-    //}
-
     public async Task UpdateServicePointStatusAsync(int servicePointId, string newStatus)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         var servicePoint = await context.ServicePoints
             .Include(sp => sp.Service)
@@ -525,7 +476,7 @@ public class TicketService : ITicketService
 
     public async Task<ServicePoint> FindBestServicePointAsync(string serviceName)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         bool isPoolingEnabled = await IsPoolingEnabledAsync();
 
@@ -599,7 +550,7 @@ public class TicketService : ITicketService
 
     public async Task RedistributeTicketsAsync(string serviceName)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         // Get all tickets for the service that are still in queue
         var tickets = await context.QueuedTickets
@@ -713,7 +664,7 @@ public class TicketService : ITicketService
     public async Task<Ticket> GenerateTicketAsync(string serviceName, string customerName,
         string customerPhoneNumber, string IdNumber, bool isEmergency = false, bool isLocked = false)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
         // Check for existing active tickets
         var existingTicket = await context.QueuedTickets
             .FirstOrDefaultAsync(t => t.IdNumber == IdNumber || t.CustomerPhoneNumber == customerPhoneNumber);
@@ -749,7 +700,7 @@ public class TicketService : ITicketService
 
     private async Task AddTicketToQueueAsync(Ticket ticket)
     {
-        using var context = _dbFactory.CreateDbContext();
+        await using var context = await _dbFactory.CreateDbContextAsync();
         context.QueuedTickets.Add(ticket);
         await context.SaveChangesAsync();
 
@@ -828,22 +779,16 @@ public class TicketService : ITicketService
 
     private async Task<Configuration?> GetConfigurationAsync(string configName)
     {
-        using var context = await _dbFactory.CreateDbContextAsync();
+        await using var context = await _dbFactory.CreateDbContextAsync();
         return await context.Configurations
             .FirstOrDefaultAsync(c => c.ConfigurationName == configName);
     }
-
-    //private void InitializeQueueCleanupTimer()
-    //{
-    //    // Check every hour for tickets that need to be removed
-    //    _queueCleanupTimer = new Timer(async _ => await CleanupExpiredTickets(), null, TimeSpan.Zero, TimeSpan.FromHours(1));
-    //}
 
     public async Task CleanupExpiredTickets()
     {
         try
         {
-            using var context = await _dbFactory.CreateDbContextAsync();
+            await using var context = await _dbFactory.CreateDbContextAsync();
             var removeAfterHrsConfig = await GetConfigurationAsync("RemovePatientsFromQueueAfterHrs");
             if (removeAfterHrsConfig?.IntValue == null || removeAfterHrsConfig.IntValue == 0)
             {
@@ -875,7 +820,7 @@ public class TicketService : ITicketService
 
     public async Task ResetQueueAsync()
     {
-        using var context = await _dbFactory.CreateDbContextAsync();
+        await using var context = await _dbFactory.CreateDbContextAsync();
 
         // Get all tickets that are in queue, called or showed up
         var activeTickets = await context.QueuedTickets

@@ -12,12 +12,15 @@ namespace QueueManagementSystem.MVC.Services
     {
         private readonly ILogger<EmailSenderService> _logger;
         private readonly IDbContextFactory<QueueManagementSystemContext> _dbContextFactory;
+        private readonly SmtpClient _smtpClient;
 
         public EmailSenderService(ILogger<EmailSenderService> logger, IDbContextFactory<QueueManagementSystemContext> dbContextFactory)
         {
             _logger = logger;
             _dbContextFactory = dbContextFactory;
+            _smtpClient = new SmtpClient();
         }
+
         public async Task SendEmailAsync(EmailMessageModel message)
         {
             try
@@ -54,22 +57,16 @@ namespace QueueManagementSystem.MVC.Services
                 // Construct the message body
                 mimeMessage.Body = builder.ToMessageBody();
 
-                // Create the Smtp client
-                using var client = new SmtpClient();
-
-                await client.ConnectAsync(emailConfig.MailServer, emailConfig.MailPort, MailKit.Security.SecureSocketOptions.Auto);
-
-                //Remove any OAuth functionality as we won't be using it. 
-                client.AuthenticationMechanisms.Remove("XOAUTH2");
-
-                // Note: only needed if the SMTP server requires authentication
-                await client.AuthenticateAsync(emailConfig.Sender, emailConfig.Password);
+                // Connect the Smtp client if not already connected
+                if (!_smtpClient.IsConnected)
+                {
+                    await _smtpClient.ConnectAsync(emailConfig.MailServer, emailConfig.MailPort, MailKit.Security.SecureSocketOptions.Auto);
+                    _smtpClient.AuthenticationMechanisms.Remove("XOAUTH2");
+                    await _smtpClient.AuthenticateAsync(emailConfig.Sender, emailConfig.Password);
+                }
 
                 // Send the message
-                await client.SendAsync(mimeMessage);
-
-                // Disconnect
-                await client.DisconnectAsync(true);
+                await _smtpClient.SendAsync(mimeMessage);
 
                 _logger.LogInformation($"Email sent successfully to {message.Recipients}");
             }
@@ -78,6 +75,15 @@ namespace QueueManagementSystem.MVC.Services
                 _logger.LogError(ex, $"An error occurred while sending email: {ex.Message}");
                 throw;
             }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_smtpClient.IsConnected)
+            {
+                await _smtpClient.DisconnectAsync(true);
+            }
+            _smtpClient.Dispose();
         }
     }
 }
